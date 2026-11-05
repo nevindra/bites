@@ -1,0 +1,592 @@
+{
+  "components": {
+    "responses": {
+      "Error": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "status"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "An error answer (problem+json)."
+      },
+      "InvalidInput": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "errors": {
+                  "items": {
+                    "properties": {
+                      "location": {
+                        "type": "string"
+                      },
+                      "max": {
+                        "description": "The upper bound of a length, range or items rule. Absent when the rule has no upper bound.",
+                        "type": "integer"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "min": {
+                        "description": "The lower bound of a length, range or items rule. Absent when the rule has no lower bound.",
+                        "type": "integer"
+                      },
+                      "rule": {
+                        "description": "The machine-readable code of the message: type, required, length, range, items, nonempty, positive, values or check. Absent when the message has none.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "location",
+                      "message"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "title",
+                "status",
+                "errors"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "The request does not fit the route's input: every error found is listed with its location."
+      },
+      "TooManyRequests": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "status"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "The client has made more requests than its rate limit allows.",
+        "headers": {
+          "RateLimit": {
+            "description": "What is left of the limit, and when it resets.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "RateLimit-Policy": {
+            "description": "The limit's policy: its name, quota and window.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          "Retry-After": {
+            "description": "Seconds until a request will be allowed.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "status"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "The request has no credential of the route's scheme, or one that is not valid.",
+        "headers": {
+          "WWW-Authenticate": {
+            "description": "The challenge: the scheme and realm to authenticate with, and error=\"invalid_token\" for a Bearer token that is not valid.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "docCaller": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "type": "object"
+      },
+      "docEvent.Request": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "docEvent.Response": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      },
+      "apiKeyAuth.X-Tenant-Key": {
+        "in": "header",
+        "name": "X-Tenant-Key",
+        "type": "apiKey"
+      },
+      "basicAuth": {
+        "scheme": "basic",
+        "type": "http"
+      },
+      "bearerAuth": {
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "cookieAuth.sid": {
+        "in": "cookie",
+        "name": "sid",
+        "type": "apiKey"
+      },
+      "mutualTLS": {
+        "description": "A client certificate our CA issued.",
+        "type": "mutualTLS"
+      },
+      "openIdConnect": {
+        "openIdConnectUrl": "https://id.example.com/.well-known/openid-configuration",
+        "type": "openIdConnect"
+      }
+    }
+  },
+  "info": {
+    "title": "Shop",
+    "version": "2.0.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/admin/reindex": {
+      "post": {
+        "operationId": "postAdminReindex",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/docEvent.Response"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/admin/stats": {
+      "get": {
+        "operationId": "getAdminStats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "format": "int64",
+                    "type": "integer"
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/docCaller"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "The signed-in caller"
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "getProducts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/docEvent.Response"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "429": {
+            "$ref": "#/components/responses/TooManyRequests"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "operationId": "getProduct",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/docEvent.Response"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ]
+      }
+    },
+    "/v1/orders": {
+      "post": {
+        "operationId": "postV1Orders",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/docEvent.Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/docEvent.Response"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "tags": [
+          "machines"
+        ]
+      }
+    },
+    "/v1/tenants/orders": {
+      "post": {
+        "operationId": "postV1TenantsOrders",
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "apiKeyAuth": [],
+            "apiKeyAuth.X-Tenant-Key": []
+          }
+        ],
+        "tags": [
+          "machines"
+        ]
+      }
+    },
+    "/v2/orders": {
+      "get": {
+        "operationId": "getV2Orders",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/docEvent.Response"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth.sid": []
+          },
+          {
+            "mutualTLS": []
+          }
+        ]
+      }
+    },
+    "/v2/reports": {
+      "get": {
+        "operationId": "getV2Reports",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/docEvent.Response"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "openIdConnect": []
+          }
+        ]
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "production",
+      "url": "https://shop.example.com/shop"
+    },
+    {
+      "url": "/shop"
+    }
+  ],
+  "tags": [
+    {
+      "name": "machines"
+    }
+  ]
+}

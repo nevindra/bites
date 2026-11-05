@@ -1,0 +1,8 @@
+# A panic in a handler is recovered by the engine, always
+
+Recovery is part of the engine, not a middleware that can be left out. A panic in a handler, a provider or middleware is recovered for that request: if nothing has been written yet, the client gets a 500 with no detail; if a streamed response has begun, the connection is closed, because a half-written response cannot be repaired. Either way the panic and its stack are logged with the request. It cannot be turned off, because a process that dies on one bad request takes every other connection with it.
+
+Panics raised at Registration ([ADR 0007](0007-mistakes-are-refused-at-registration.md)) are not recovered: they are refusals, and the program is meant to stop on them.
+
+**The 500 carries the request id in its header too** (built 2026-11-01, milestone 3 wave 0). The engine's 500 after a panic always carried `request_id` in its body (ADR 0012), but the `X-Request-ID` header of the `RequestID` middleware ([ADR 0032](0032-four-first-party-middleware.md)) was missing, because the middleware adds it on the way out and a panic means the chain never returns. The middleware now tells the engine the header's name when it sets the id, and the engine adds that header with the id to its own 500. A route with no request-ID middleware gets no such header. The name is the middleware's configuration and the id is one it validated or generated, so no request bytes reach a response header unchecked. It costs no allocation and 16 bytes of the connection struct (360 to 376 B), inside the 384-byte size class it already used, so an idle connection holds the same memory (`TestThe500AfterAPanicCarriesTheIDInTheConfiguredHeaderAndAPlainOneCarriesNone`).
+

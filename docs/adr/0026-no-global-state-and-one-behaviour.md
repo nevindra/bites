@@ -1,0 +1,3 @@
+# No package-level state, no environment variables, and one behaviour in every build
+
+The framework has no package-level mutable variable and reads no environment variable. Everything is configured on an app instance, and logging goes through the `*slog.Logger` given to it. At start-up the app logs its effective settings, one line each, marked `default` or `custom` (an idea taken from fib). There is no debug mode: a warning that matters in development matters in production, and Gin's only report of a double write disappears in release mode ([`docs/research/gin-echo/`](../research/gin-echo/report.md)).

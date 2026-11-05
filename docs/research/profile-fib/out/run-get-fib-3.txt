@@ -1,0 +1,4 @@
+window_user_ticks 1003 window_sys_ticks 1540
+window_syscr 1115 window_syscw 1086
+window_vol_ctx 85742 window_nonvol_ctx 9028 threads 11
+client {"cpu_ns_per_req":2462.8093871425926,"errors":0,"p50_us":245,"p999_us":2736,"p99_us":655,"peak_rss_sampled":28454912,"reqs":11409734,"rps":1035819.3120803708,"vmhwm":28119040}

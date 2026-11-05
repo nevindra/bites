@@ -1,0 +1,15 @@
+{
+"date":"2026-10-31T15:40:33+07:00",
+"nilo_go_commit":"a66baa8",
+"nilo_go_dirty":"14 paths",
+"nilo_commit":"v0.8.0-29-gbdb943b",
+"nilo_dirty":"3 paths",
+"go":"go version go1.27.3 linux/amd64",
+"zig":"0.17.0",
+"huma":"v2.40.0",
+"fib":"v1.6.0",
+"kernel":"7.2.8-9-omarchy",
+"cpu":"AMD Ryzen 7 9700X 8-Core Processor",
+"server_cpus":"2,3,10,11","client_cpus":"4-7,12-15",
+"rounds":1,"conns":256,"warm":"3s","dur":"10s","n1":10000,"n2":20000,"settle":"5s"
+}

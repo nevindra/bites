@@ -1,0 +1,15 @@
+base out/idle-base-1.json: conns 10000->20000 fails 0 rss 4184 B  heap+stack 3163 B
+base out/idle-base-2.json: conns 10000->20000 fails 0 rss 4185 B  heap+stack 3158 B
+base out/idle-base-3.json: conns 10000->20000 fails 0 rss 4184 B  heap+stack 3161 B
+base rss: mean 4184 B  min 4184  max 4185
+base heap+stack: mean 3161 B  min 3158  max 3163
+plain out/idle-plain-1.json: conns 10000->20000 fails 0 rss 3973 B  heap+stack 3165 B
+plain out/idle-plain-2.json: conns 10000->20000 fails 0 rss 4180 B  heap+stack 3162 B
+plain out/idle-plain-3.json: conns 10000->20000 fails 0 rss 4183 B  heap+stack 3160 B
+plain rss: mean 4112 B  min 3973  max 4183
+plain heap+stack: mean 3162 B  min 3160  max 3165
+tls out/idle-tls-1.json: conns 10000->20000 fails 0 rss 21581 B  heap+stack 11900 B
+tls out/idle-tls-2.json: conns 10000->20000 fails 0 rss 22449 B  heap+stack 11901 B
+tls out/idle-tls-3.json: conns 10000->20000 fails 0 rss 20738 B  heap+stack 11903 B
+tls rss: mean 21589 B  min 20738  max 22449
+tls heap+stack: mean 11901 B  min 11900  max 11903

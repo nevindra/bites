@@ -1,0 +1,29 @@
+{
+  "components": {
+    "wireNames": {
+      "additionalProperties": false,
+      "properties": {
+        "as_tagged": {
+          "type": "string"
+        },
+        "httpCode": {
+          "format": "int32",
+          "type": "integer"
+        },
+        "itemId": {
+          "format": "int64",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "itemId",
+        "httpCode",
+        "as_tagged"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/wireNames"
+  }
+}

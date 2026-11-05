@@ -1,0 +1,29 @@
+{
+  "components": {
+    "usersUser": {
+      "properties": {
+        "admin": {
+          "type": "boolean"
+        },
+        "email": {
+          "type": "string"
+        },
+        "id": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/usersUser"
+  }
+}

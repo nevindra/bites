@@ -1,0 +1,232 @@
+{
+  "components": {
+    "responses": {
+      "Error": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "status"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "An error answer (problem+json)."
+      },
+      "InvalidInput": {
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "properties": {
+                "detail": {
+                  "type": "string"
+                },
+                "errors": {
+                  "items": {
+                    "properties": {
+                      "location": {
+                        "type": "string"
+                      },
+                      "max": {
+                        "description": "The upper bound of a length, range or items rule. Absent when the rule has no upper bound.",
+                        "type": "integer"
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "min": {
+                        "description": "The lower bound of a length, range or items rule. Absent when the rule has no lower bound.",
+                        "type": "integer"
+                      },
+                      "rule": {
+                        "description": "The machine-readable code of the message: type, required, length, range, items, nonempty, positive, values or check. Absent when the message has none.",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "location",
+                      "message"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "request_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "integer"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "truncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "title",
+                "status",
+                "errors"
+              ],
+              "type": "object"
+            }
+          }
+        },
+        "description": "The request does not fit the route's input: every error found is listed with its location."
+      }
+    },
+    "schemas": {
+      "CreateUserBody": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "admin": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Users",
+    "version": "1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/users": {
+      "post": {
+        "operationId": "postUsers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Created",
+            "headers": {
+              "Location": {
+                "description": "The URL of the created resource.",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/users/{id}": {
+      "get": {
+        "operationId": "getUsersById",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expand",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/InvalidInput"
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    }
+  }
+}

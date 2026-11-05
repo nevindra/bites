@@ -1,0 +1,73 @@
+# OpenAPI
+
+**How the API document is made: described at Registration from the types, written once at start, served as fixed bytes, with prose from options, a `Descriptions` method or doc comments, and a documentation UI as a module.**
+
+**Guide:** [openapi](../guide/openapi.md) · **Reference:** [openapi](../reference/openapi.md)
+
+## Overview
+
+The OpenAPI 3.1 document is built from the same plans and types a route was compiled from, so it cannot disagree with the code. Every typed route leaves a route record at Registration; when the app starts serving, the schemas are named, the references resolved and the JSON written once; a request for the document copies those bytes into the response.
+
+```text
+Registration:   route record = operation (parameters, body, responses, tags)  built from the plans
+                a description naming a missing field, a type that cannot be described  -> panic here
+start of serving:  name the component schemas, resolve references, write JSON once
+request:        GET <path> -> the fixed bytes, application/json     (nothing else runs per request)
+
+prose:  now        Summary, Description, Tag options  +  Descriptions() map[string]string on a type
+        generated    bites-doc reads the doc comments of the fields and writes the same Descriptions methods
+```
+
+The error answers are two shared `components.responses`, one for the 400 with its list of errors and one for every other problem+json answer. The document is opt-in through `app.OpenAPI(path, Info)`, because an API description is a decision about what to publish.
+
+## Rules
+
+1. **The document is a route record kept at Registration and built once at start.** A type the document cannot describe and a description that names a missing field are Registration panics naming the route and the line, and a mistake only the whole set of types shows (two types with one name and one package path) panics at start. The document spends none of the four axes, since nothing about it runs per request. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+1b. **An anonymous request `Body` is a component named after its Input, and the bytes can be taken without serving.** `CreateUser`'s is `CreateUserBody`, through `Info.SchemaName` like any other, so a client has a type to import; `app.OpenAPIDocument()` returns the JSON for a build step or a test that compares it with a checked-in file. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+2. **It is exposed by `app.OpenAPI(path, Info{Title, Version, Description, Servers})`, once per app, and nothing is served by default.** It is a method that registers a route, not an option of `New`, so a conflict with a route is raised at the line that registered the second. Serving `/openapi.json` unasked would publish the API. `Servers` says where the API is served, behind a proxy too, and is configuration: the document is the same bytes for every request, so it is never read from a forwarding header; a URL with a trailing slash, a query, a variable, a userinfo or a `..` is refused. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md), [ADR 0025](../adr/0025-no-proxy-is-trusted-by-default.md)
+
+3. **The body is described by the way its type is read, and the success responses by the output type.** JSON bodies are `application/json`, `Form[T]` is urlencoded with the same properties, `[]byte` is `*/*` with no schema, `Upload` is `multipart/form-data` as an object, and `Raw[T]` stays JSON. A wrapper is its status, `Text` is `text/plain`, `SSE` is `text/event-stream`, `Events[T]` is `text/event-stream` with each event, its `data` the JSON of `T`, under `x-itemSchema` (the shape of 3.2's `itemSchema`, which 3.1 lacks), and a route returning an interface gets the responses of every type declared with `Returns`. Headers and cookies a handler sets at run time are not in the document. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+4. **Constraint types state their bounds for a request and not for a response, and an enum on output is advisory.** Nothing checks a value a handler returns, so the document says what is enforced and no more. A `Format` is the exception: it is an annotation on output, where even a checked one is not enforced, so it is stated in both directions, and its refusals hold on output. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+4a. **Component names come from the Go types and may be chosen with `Info.SchemaName`.** The default is the type name, qualified by package only on a collision; `SchemaName func(pkgPath, name string) string` names a type for a frontend that already has a spelling, is used whether or not the default would collide, keeps the mode suffixes, and is refused at start when two types get one name, a name has a character OpenAPI does not allow, or a name is another type's default. It is on `Info` because a component is shared by every route that uses its type. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+4b. **A bound at the type's limit is no bound, a CSV is an array, and an optional header is optional.** `maximum` and `maxLength` are stated only when the author's number is not the type's own limit; a `CSV[T]` is `type: array` of `T`'s schema with `style` and `minItems`/`maxItems`; a `Created`'s `Location` is described as present only when the handler sets it. The document promises what the types and the engine can keep. [ADR 0021](../adr/0021-validation-is-a-method-and-a-few-constraint-types.md), [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md), [ADR 0013](../adr/0013-other-statuses-are-wrapper-types.md)
+
+4c. **A type that writes its own JSON is described by a registration or the route is refused.** The document is built from types and cannot read a `MarshalJSON`, so a `pgtype.Timestamptz` field would be `{}` in the document and `unknown` in a generated client, with nothing failing. `WithJSONSchema[T](JSONSchema{Type, Format, Nullable})` states its shape wherever it appears, `Type: "any"` says it is free-form, and without either the route panics at Registration naming the field and the option. `json.RawMessage` and `jsontext.Value` are free-form by name. A nullable type is described as nullable in a response only, because a request that sent `null` for a plain field is a 400. [0076](../adr/0076-a-type-that-writes-its-own-json-is-described-by-a-registration-or-refused.md)
+
+5. **Prose comes from options, from a `Descriptions` method, and from doc comments through `bites-doc`.** `Summary`, `Description` and `Tag` are options at Registration; `Descriptions() map[string]string` gives a type's field prose by Go field name and is checked against the wire fields, so a description cannot outlive its field, and a section of embedded structs is described by each embedded struct's own method, the section's own winning. A `doc` tag was rejected because it is the tag a Section removes and nobody checks it. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+6. **A WebSocket route is the `get` of its handshake, non-standard methods are left out, and what would be dropped silently is refused.** The handshake has parameters, credentials and refusals OpenAPI describes, and its messages are stated under `x-websocket`, since OpenAPI 3.1 has no keyword for them (revised 2026-11-04, after the fifth agent usability run found a query ticket the document could not state); `Returns`, `MediaType` and `SendsHeader` on a WebSocket route and a `Summary` or `Description` on a group are refused, and two routes the document would hold as one path or one operation are refused. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+7. **Every operation has an `operationId` made from its method and path, or given with `OperationID`.** `GET /users/{id}` is `getUsersById`, so renaming a handler never renames a generated client's method; two ids a generator would make one method of (differing only in case or in `_`, `.`, `-`) are refused at the second route's line rather than told apart by a suffix that would depend on the order of registration. The handler's function name was rejected: generic handlers and closures have no usable one, and methods of several resources collide. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+8. **The document states the security the route runs and can leave a route out.** The schemes of the auth Providers a route runs (`BearerAuth`, `BasicAuth`, `APIKeyAuth`, and the application's own given to `CustomAuth` with its `SecurityScheme`) are `securitySchemes` and the operation's `security`, the Providers' credentials required together, an `AnyAuth`'s as alternatives and an `Opt` field's with the empty requirement `{}`, with a 401; a `RateLimiter`'s middleware adds a 429 and `CSRF` a 403 to state-changing methods; app middleware is read at start. What the handler decides at run time is stated by the route: `ErrorStatuses` for its error statuses, `MediaType` for what a `Bytes`, `File` or `Stream` sends, `SendsHeader` for each header it sets; a `File` states its own validators, ranges and refusals, and a Provider's `Header` section is a parameter. `Undocumented()` leaves a route or a group out with its types, and `stdhttp`'s mounts and `docsui`'s page carry it. [ADR 0069](../adr/0069-the-api-document-states-what-a-routes-providers-and-middleware-ask-and-answer-and-a-route-can-be-left-out.md)
+
+9. **The goldens are validated whole against the official OpenAPI 3.1 schemas.** The check lives in its own module under `docs/research/openapi-valid/`, because the validator is a third-party dependency and the core imports the standard library only. [ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)
+
+10. **A type states its own example, a route its headers with their schema, a struct its deprecated fields.** `Example() T` on a type is checked by the codec at Registration and written as `examples`; `SendsHeader[T](name, description)` replaces the names-only `SendsHeaders`; `DeprecatedFields() []string` names fields as `Descriptions` does, so each fact has one place and one spelling and a stale one is a panic ([ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)).
+
+## Decisions
+
+| ADR | What it decides |
+|---|---|
+| [0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md) | the document is built at Registration and start, exposed by `OpenAPI`, with prose from options and later from doc comments, and an `operationId` from the method and path or `OperationID` |
+| [0025](../adr/0025-no-proxy-is-trusted-by-default.md) | the document's `servers` are `Info.Servers`, configuration fixed at Registration, never a forwarded host |
+| [0069](../adr/0069-the-api-document-states-what-a-routes-providers-and-middleware-ask-and-answer-and-a-route-can-be-left-out.md) | the document's security from the Providers and middleware a route runs, `CustomAuth`, `AnyAuth` and the optional credential, and `Undocumented` |
+| [0071](../adr/0071-the-api-documentation-ui-is-a-module-that-loads-a-pinned-cdn-version.md) | the documentation UI is a module serving a small page that loads Swagger UI or Scalar from a pinned CDN version |
+| [0072](../adr/0072-descriptions-are-generated-from-doc-comments-by-bites-doc.md) | `bites-doc` writes the `Descriptions` methods from the doc comments of the fields |
+| [0076](../adr/0076-a-type-that-writes-its-own-json-is-described-by-a-registration-or-refused.md) | a type that writes its own JSON is described by `WithJSONSchema` or refused, never as `{}` by accident |
+
+## Open questions
+
+- **Comments describe fields only.** `bites-doc` ([ADR 0072](../adr/0072-descriptions-are-generated-from-doc-comments-by-bites-doc.md)) fills `Descriptions`; the prose of an operation still comes from `Summary`, `Description` and `Tag`, and a nested type's `Descriptions` is checked only where the document reaches it.
+- **A made `operationId` reads as the path** and is long for a deep one; the uniqueness refusal applies also to an app that serves no document, so `GET /x` and `GET /x/` need an `OperationID` there ([ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)).
+- **A `[]byte` output is a base64 string**, since there is no raw-bytes response type to describe ([ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)).
+- **The documentation UI** ([ADR 0071](../adr/0071-the-api-documentation-ui-is-a-module-that-loads-a-pinned-cdn-version.md)) is a module whose default CDN versions were not fetched; behind a prefix its `SpecURL` must carry the prefix.
+- **`servers` are fixed**: one app served under two public URLs lists both, server variables are not built, and a relative server URL that would be right behind any prefix with no configuration was not built because how tools join it with a path was not measured ([ADR 0025](../adr/0025-no-proxy-is-trusted-by-default.md)).
+- **Security is read from what the framework made, and what the application said**: an auth Provider the application wrote is described only through `CustomAuth`, whose scheme nothing checks; a Provider with dependencies cannot be given to it or made optional; a limit taken with `Allow` in a Provider and a verifier's 403 are not described; scopes are always empty and OAuth 2 flows are not a `SecurityScheme` type (whether they should be, with scopes declared per route, is open); and a route with a body and a credential has one 400 shape for two kinds of 400 ([ADR 0069](../adr/0069-the-api-document-states-what-a-routes-providers-and-middleware-ask-and-answer-and-a-route-can-be-left-out.md)).
+- **An enum on output is advisory**, so a generated client may reject a value it does not know ([ADR 0042](../adr/0042-text-values-are-decoded-by-type.md), [request input](request-input.md)).
+- **AsyncAPI for WebSocket routes**, the format made for their messages, is not planned: the handshake is in the OpenAPI document and the messages under `x-websocket` ([ADR 0020](../adr/0020-descriptions-come-from-registration-and-later-from-doc-comments.md)).

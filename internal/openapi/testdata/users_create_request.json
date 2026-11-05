@@ -1,0 +1,22 @@
+{
+  "components": {
+    "usersCreate": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/usersCreate"
+  }
+}

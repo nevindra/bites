@@ -1,0 +1,56 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+                             │ c-before.txt │            c-after.txt             │
+                             │    sec/op    │   sec/op     vs base               │
+HotPaths/GET                    1.514µ ± 2%   1.468µ ± 1%   -3.07% (p=0.002 n=6)
+HotPaths/POST                   2.246µ ± 2%   1.796µ ± 2%  -20.04% (p=0.002 n=6)
+HotPaths/POST_validate          2.272µ ± 1%   1.806µ ± 2%  -20.51% (p=0.002 n=6)
+HotPaths/POST_form              2.272µ ± 1%   2.004µ ± 3%  -11.78% (p=0.002 n=6)
+HotPaths/POST_mw1               2.443µ ± 1%   1.961µ ± 2%  -19.71% (p=0.002 n=6)
+HotPaths/POST_mw3               2.631µ ± 1%   2.143µ ± 4%  -18.53% (p=0.002 n=6)
+HotPaths/POST_providers         2.515µ ± 5%   1.968µ ± 6%  -21.77% (p=0.002 n=6)
+HotPaths/POST_requestid         2.469µ ± 1%   1.986µ ± 3%  -19.57% (p=0.002 n=6)
+HotPaths/POST_cors              2.639µ ± 1%   2.085µ ± 1%  -20.98% (p=0.002 n=6)
+HotPaths/POST_timeout           2.499µ ± 1%   1.980µ ± 2%  -20.77% (p=0.002 n=6)
+HotPaths/POST_accesslog_text    3.212µ ± 1%   2.490µ ± 5%  -22.48% (p=0.002 n=6)
+HotPaths/POST_accesslog_json    3.158µ ± 0%   2.476µ ± 1%  -21.61% (p=0.002 n=6)
+HotPaths/POST_all_four          3.882µ ± 1%   3.134µ ± 7%  -19.27% (p=0.002 n=6)
+geomean                         2.539µ        2.066µ       -18.61%
+
+                             │ c-before.txt │            c-after.txt             │
+                             │     B/op     │    B/op     vs base                │
+HotPaths/GET                     224.0 ± 0%   224.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST                    352.0 ± 0%   352.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_validate           352.0 ± 0%   352.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_form               352.0 ± 0%   352.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_mw1                432.0 ± 0%   432.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_mw3                432.0 ± 0%   432.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_providers          368.0 ± 0%   368.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_requestid          432.0 ± 0%   432.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_cors               464.0 ± 0%   464.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_timeout            432.0 ± 0%   432.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_accesslog_text     352.0 ± 0%   352.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_accesslog_json     352.0 ± 0%   352.0 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_all_four           544.0 ± 0%   544.0 ± 0%       ~ (p=1.000 n=6) ¹
+geomean                          383.8        383.8       +0.00%
+¹ all samples are equal
+
+                             │ c-before.txt │            c-after.txt             │
+                             │  allocs/op   │ allocs/op   vs base                │
+HotPaths/GET                     2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST                    2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_validate           2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_form               2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_mw1                2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_mw3                2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_providers          2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_requestid          2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_cors               2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_timeout            2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_accesslog_text     2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_accesslog_json     2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=6) ¹
+HotPaths/POST_all_four           3.000 ± 0%   3.000 ± 0%       ~ (p=1.000 n=6) ¹
+geomean                          2.063        2.063       +0.00%
+¹ all samples are equal

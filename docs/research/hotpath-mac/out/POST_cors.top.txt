@@ -1,0 +1,68 @@
+File: nilogo.test
+Type: cpu
+Time: 2026-11-02 09:41:34 WIB
+Duration: 8.90s, Total samples = 7.09s (79.63%)
+Showing nodes accounting for 5.41s, 76.30% of 7.09s total
+Dropped 112 nodes (cum <= 0.04s)
+Showing top 60 nodes out of 167
+      flat  flat%   sum%        cum   cum%
+     0.72s 10.16% 10.16%      0.73s 10.30%  runtime.nanotime1
+     0.66s  9.31% 19.46%      0.66s  9.31%  runtime.walltime
+     0.55s  7.76% 27.22%      0.55s  7.76%  runtime.kevent
+     0.24s  3.39% 30.61%      0.25s  3.53%  github.com/nevindra/nilo-go/internal/engine.appendClean
+     0.21s  2.96% 33.57%      0.21s  2.96%  internal/bytealg.IndexByteString
+     0.20s  2.82% 36.39%      0.47s  6.63%  runtime.selectgo
+     0.20s  2.82% 39.21%      0.24s  3.39%  runtime.unlock2
+     0.14s  1.97% 41.18%      0.33s  4.65%  github.com/nevindra/nilo-go/internal/h1.ParseHead
+     0.12s  1.69% 42.88%      0.12s  1.69%  runtime.lock2
+     0.10s  1.41% 44.29%      0.10s  1.41%  runtime.memmove
+     0.08s  1.13% 45.42%      2.49s 35.12%  github.com/nevindra/nilo-go.(*cors).serve
+     0.07s  0.99% 46.40%      0.07s  0.99%  encoding/json/internal/jsonwire.ConsumeSimpleString (inline)
+     0.07s  0.99% 47.39%      2.23s 31.45%  github.com/nevindra/nilo-go.(*chainRun).dispatch
+     0.07s  0.99% 48.38%      0.07s  0.99%  internal/sync.(*Mutex).Lock (inline)
+     0.07s  0.99% 49.37%      0.07s  0.99%  runtime.memclrNoHeapPointers
+     0.07s  0.99% 50.35%      0.08s  1.13%  runtime.releaseSudog
+     0.06s  0.85% 51.20%      0.06s  0.85%  encoding/json/internal/jsonwire.AppendQuote
+     0.06s  0.85% 52.05%      0.09s  1.27%  encoding/json/jsontext.(*decoderState).reset
+     0.06s  0.85% 52.89%      0.06s  0.85%  github.com/nevindra/nilo-go/internal/h1.parseRequestLine
+     0.06s  0.85% 53.74%      0.18s  2.54%  github.com/nevindra/nilo-go/internal/jsoncodec.appendValue
+     0.06s  0.85% 54.58%      1.15s 16.22%  github.com/nevindra/nilo-go/internal/memconn.(*deadline).set
+     0.06s  0.85% 55.43%      0.06s  0.85%  internal/sync.(*Mutex).Unlock (inline)
+     0.06s  0.85% 56.28%      0.29s  4.09%  runtime.chansend
+     0.06s  0.85% 57.12%      0.06s  0.85%  runtime.madvise
+     0.06s  0.85% 57.97%      0.06s  0.85%  sync.(*Pool).pin
+     0.06s  0.85% 58.82%      1.27s 17.91%  time.Now
+     0.06s  0.85% 59.66%      1.20s 16.93%  time.now
+     0.05s  0.71% 60.37%      0.24s  3.39%  github.com/nevindra/nilo-go.decodeQuery
+     0.05s  0.71% 61.07%      0.70s  9.87%  github.com/nevindra/nilo-go/internal/engine.(*conn).write
+     0.05s  0.71% 61.78%      0.08s  1.13%  github.com/nevindra/nilo-go/internal/h1.readLine
+     0.05s  0.71% 62.48%      0.67s  9.45%  github.com/nevindra/nilo-go/internal/memconn.(*Conn).Read
+     0.05s  0.71% 63.19%      0.08s  1.13%  internal/strconv.ParseInt
+     0.05s  0.71% 63.89%      0.18s  2.54%  runtime.(*timer).modify
+     0.05s  0.71% 64.60%      0.05s  0.71%  runtime.memequal
+     0.04s  0.56% 65.16%      0.19s  2.68%  encoding/json/jsontext.(*decoderState).ReadValue
+     0.04s  0.56% 65.73%      2.52s 35.54%  github.com/nevindra/nilo-go.(*chainRun).step
+     0.04s  0.56% 66.29%      0.16s  2.26%  github.com/nevindra/nilo-go.(*textRun).offer
+     0.04s  0.56% 66.85%      5.72s 80.68%  github.com/nevindra/nilo-go/internal/engine.(*conn).serve
+     0.04s  0.56% 67.42%      0.69s  9.73%  github.com/nevindra/nilo-go/internal/jsoncodec.(*Decoder).Decode
+     0.04s  0.56% 67.98%      0.09s  1.27%  github.com/nevindra/nilo-go/internal/jsoncodec.(*state).text
+     0.04s  0.56% 68.55%      0.05s  0.71%  github.com/nevindra/nilo-go/internal/router.(*matcher[go.shape.*uint8]).walk
+     0.04s  0.56% 69.11%      0.04s  0.56%  strings.EqualFold
+     0.03s  0.42% 69.53%      0.04s  0.56%  encoding/json/jsontext.(*decoderState).ReadToken
+     0.03s  0.42% 69.96%      0.10s  1.41%  encoding/json/jsontext.(*decoderState).consumeValue
+     0.03s  0.42% 70.38%      0.04s  0.56%  encoding/json/jsontext.(*objectNamespace).insert
+     0.03s  0.42% 70.80%      2.02s 28.49%  github.com/nevindra/nilo-go.(*typedRoute[go.shape.struct { Path struct { ID int64 }; Query struct { Expand github.com/nevindra/nilo-go/internal/wire.Opt[bool]; Page int }; Body struct { Name string; Email string; Age int } },go.shape.struct { ID int64 "json:\"id\""; Name string "json:\"name\""; Email string "json:\"email\""; Age int "json:\"age\""; Page int "json:\"page\"" }]).serve
+     0.03s  0.42% 71.23%      0.08s  1.13%  github.com/nevindra/nilo-go.Request.Header
+     0.03s  0.42% 71.65%      0.06s  0.85%  github.com/nevindra/nilo-go/internal/engine.(*Response).start
+     0.03s  0.42% 72.07%      0.80s 11.28%  github.com/nevindra/nilo-go/internal/engine.(*conn).await
+     0.03s  0.42% 72.50%      4.04s 56.98%  github.com/nevindra/nilo-go/internal/engine.(*conn).handle
+     0.03s  0.42% 72.92%      0.52s  7.33%  github.com/nevindra/nilo-go/internal/jsoncodec.(*state).object
+     0.03s  0.42% 73.34%      0.23s  3.24%  github.com/nevindra/nilo-go/internal/jsoncodec.(*state).scalar
+     0.03s  0.42% 73.77%      0.54s  7.62%  github.com/nevindra/nilo-go/internal/jsoncodec.(*state).value
+     0.03s  0.42% 74.19%      0.11s  1.55%  github.com/nevindra/nilo-go/internal/router.(*Router[go.shape.*uint8]).Lookup
+     0.03s  0.42% 74.61%      0.05s  0.71%  internal/strconv.AppendUint
+     0.03s  0.42% 75.04%      0.16s  2.26%  runtime.mallocgcSmallNoscan
+     0.03s  0.42% 75.46%      0.76s 10.72%  runtime.nanotime (inline)
+     0.02s  0.28% 75.74%      0.08s  1.13%  encoding/json/jsontext.(*decoderState).PeekKind
+     0.02s  0.28% 76.02%      3.12s 44.01%  github.com/nevindra/nilo-go.(*App).serveChain
+     0.02s  0.28% 76.30%      1.26s 17.77%  github.com/nevindra/nilo-go.(*bodyPlan).read

@@ -1,0 +1,3 @@
+# The core imports the standard library and nothing else
+
+The framework's core module depends on no third-party module. Gin shows what happens otherwise: its hello world links quic-go, mongo-driver, protobuf, toml and yaml and builds to about 19 MB, while Echo, which depends on x/net alone, builds to 11 MB ([`docs/research/gin-echo/`](../research/gin-echo/report.md)). A dependency is also a release we do not control and a security notice we did not write. A feature that needs one (a compressor, say) lives in a separate module, or the dependency gets an ADR of its own that says what it costs and why the standard library will not do.

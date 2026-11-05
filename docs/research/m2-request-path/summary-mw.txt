@@ -1,0 +1,18 @@
+get
+  after2  krps [845.5, 819.5, 819.5] mean 828.1  cpu ns/req [3622, 3709, 3696]  p99 us [840, 921, 930]  errors 0  dropped []
+  cors    krps [798.4, 753.9, 778.5] mean 776.9  cpu ns/req [3913, 3982, 4020]  p99 us [1009, 1153, 1053]  errors 0  dropped []
+  rid     krps [755.6, 772.7, 741.4] mean 756.6  cpu ns/req [4005, 4004, 3984]  p99 us [1170, 1099, 1181]  errors 0  dropped []
+  log     krps [651.2, 661.2, 661.4] mean 658.0  cpu ns/req [4956, 4957, 4968]  p99 us [1188, 1152, 1125]  errors 0  dropped []
+  timeout krps [765.0, 758.1, 737.6] mean 753.6  cpu ns/req [4079, 4104, 4064]  p99 us [1082, 1117, 1176]  errors 0  dropped []
+post
+  after2  krps [699.6, 683.2, 691.0] mean 691.3  cpu ns/req [4620, 4705, 4657]  p99 us [1004, 1074, 1035]  errors 0  dropped []
+  cors    krps [634.5, 654.8, 650.6] mean 646.6  cpu ns/req [5051, 4973, 5051]  p99 us [1313, 1250, 1235]  errors 0  dropped []
+  rid     krps [659.0, 644.0, 649.2] mean 650.7  cpu ns/req [4976, 5096, 5078]  p99 us [1212, 1273, 1238]  errors 0  dropped []
+  log     krps [576.7, 564.3, 566.7] mean 569.2  cpu ns/req [5929, 6019, 6021]  p99 us [1292, 1384, 1344]  errors 0  dropped []
+  timeout krps [650.4, 637.3, 623.0] mean 636.9  cpu ns/req [5054, 5164, 5089]  p99 us [1250, 1293, 1333]  errors 0  dropped []
+allocs
+  after2  allocs/req [2.007, 2.007, 2.007]  bytes/req [321, 321, 321]
+  cors    allocs/req [2.007, 2.007, 2.009]  bytes/req [337, 337, 338]
+  rid     allocs/req [2.007, 2.007, 2.009]  bytes/req [337, 337, 338]
+  log     allocs/req [2.009, 2.009, 2.007]  bytes/req [338, 338, 337]
+  timeout allocs/req [2.007, 2.007, 2.007]  bytes/req [337, 337, 337]

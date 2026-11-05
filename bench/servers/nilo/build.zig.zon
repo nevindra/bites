@@ -1,0 +1,13 @@
+.{
+    .name = .nilo_bench_server,
+    .version = "0.0.0",
+    .minimum_zig_version = "0.17.0",
+    .fingerprint = 0x9e7affaa2f3a7534,
+    .dependencies = .{
+        // The sibling checkout, read and built against, never edited. A path dependency keeps
+        // the build on the working copy the harness is run beside; the commit it was measured
+        // at is recorded by bench/run.sh in out/versions.json.
+        .nilo = .{ .path = "../../../../nilo" },
+    },
+    .paths = .{ "build.zig", "build.zig.zon", "main.zig" },
+}

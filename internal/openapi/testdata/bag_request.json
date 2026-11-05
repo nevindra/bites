@@ -1,0 +1,13 @@
+{
+  "components": {
+    "Bag": {
+      "additionalProperties": {
+        "$ref": "#/components/schemas/Bag"
+      },
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/Bag"
+  }
+}

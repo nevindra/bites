@@ -1,0 +1,1 @@
+{"allocs_per_req":3.014212170986739,"bytes_per_req":289.38480028845,"cpu_ns_per_req":14422.499098593806,"errors":0,"goroutines_end":654,"p50_us":35,"p90_us":78,"p999_us":560,"p99_us":103,"reqs":99844,"rps":6656.226526070726,"vmhwm":92823552}

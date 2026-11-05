@@ -1,0 +1,1 @@
+{"gcsys":2990832,"gomaxprocs":4,"goroutines":9,"heap_alloc":23195200,"heap_inuse":28385280,"m_stacks":557056,"m_total":52287752,"mallocs":1382621,"max_goroutines":30,"mspan_inuse":499200,"num_gc":8,"other_sys":1031097,"scan_stack":26424,"stack_inuse":557056,"sys":52287752,"total_alloc":79717592}

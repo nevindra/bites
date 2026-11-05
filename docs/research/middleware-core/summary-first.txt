@@ -1,0 +1,15 @@
+get
+  before  krps [890.7, 891.3, 891.4] mean 891.1  cpu ns/req [3482, 3477, 3490]  p99 us [738, 733, 735]  errors 0
+  after   krps [896.1, 895.5, 895.5] mean 895.7  cpu ns/req [3443, 3452, 3446]  p99 us [737, 733, 737]  errors 0
+  mw1     krps [822.2, 816.5, 821.2] mean 820.0  cpu ns/req [3858, 3881, 3864]  p99 us [890, 924, 887]  errors 0
+  mw3     krps [782.0, 778.7, 777.6] mean 779.4  cpu ns/req [4102, 4107, 4113]  p99 us [952, 964, 974]  errors 0
+post
+  before  krps [741.8, 735.8, 737.6] mean 738.4  cpu ns/req [4387, 4416, 4410]  p99 us [894, 913, 899]  errors 0
+  after   krps [744.0, 741.0, 740.7] mean 741.9  cpu ns/req [4359, 4373, 4384]  p99 us [895, 901, 901]  errors 0
+  mw1     krps [667.8, 666.3, 666.4] mean 666.8  cpu ns/req [4966, 4973, 4976]  p99 us [1167, 1175, 1171]  errors 0
+  mw3     krps [633.9, 633.5, 632.0] mean 633.1  cpu ns/req [5280, 5285, 5298]  p99 us [1271, 1272, 1286]  errors 0
+allocs
+  before  allocs/req [2.007, 2.006, 2.007]  bytes/req [321, 321, 321]
+  after   allocs/req [2.008, 2.007, 2.006]  bytes/req [322, 321, 321]
+  mw1     allocs/req [2.008, 2.008, 2.009]  bytes/req [450, 449, 450]
+  mw3     allocs/req [2.009, 2.007, 2.009]  bytes/req [450, 449, 450]

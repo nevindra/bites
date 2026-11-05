@@ -1,0 +1,51 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  749163	      1563 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  785320	      1557 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  621607	      1878 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  627958	      1884 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  646748	      1954 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  618456	      1920 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  556466	      2113 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  562112	      2115 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  551548	      2205 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  552981	      2211 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  375658	      3216 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  373666	      3242 ns/op	     544 B/op	       3 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  808441	      1524 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  800934	      1511 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  653458	      1849 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  642345	      1855 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  649282	      1854 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  656924	      1863 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  572654	      2157 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  480822	      2149 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  554875	      2182 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  556567	      2207 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  388413	      3127 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  382830	      3132 ns/op	     544 B/op	       3 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  804792	      1522 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  825391	      1561 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  632494	      1865 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  661864	      1855 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  626319	      1901 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  646890	      1957 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  566943	      2182 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  547730	      2195 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  535369	      2202 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  552127	      2155 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  387776	      3139 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  382886	      3126 ns/op	     544 B/op	       3 allocs/op
+PASS

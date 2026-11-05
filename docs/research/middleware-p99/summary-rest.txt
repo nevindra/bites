@@ -1,0 +1,15 @@
+get
+  none   krps [1023.1, 1025.4, 1028.6] mean 1025.7  cpu ns/req [2775, 2782, 2775]  p50 us [229, 229, 228]  p99 us [821, 822, 810]  mean p99 818
+  prov   krps [970.2, 976.4, 976.4] mean 974.3  cpu ns/req [2986, 2969, 2974]  p50 us [241, 240, 240]  p99 us [882, 864, 861]  mean p99 869
+  valid  krps [1022.7, 1021.7, 1024.7] mean 1023.0  cpu ns/req [2795, 2790, 2775]  p50 us [230, 230, 230]  p99 us [827, 817, 808]  mean p99 817
+  rid    krps [960.2, 964.8, 963.6] mean 962.9  cpu ns/req [3043, 3042, 3030]  p50 us [244, 244, 243]  p99 us [875, 868, 870]  mean p99 871
+post
+  none   krps [903.9, 904.1, 903.9] mean 904.0  cpu ns/req [3315, 3313, 3317]  p50 us [257, 257, 258]  p99 us [945, 951, 949]  mean p99 948
+  prov   krps [855.6, 862.5, 861.2] mean 859.8  cpu ns/req [3571, 3542, 3548]  p50 us [271, 270, 270]  p99 us [1004, 980, 984]  mean p99 989
+  valid  krps [895.5, 899.7, 898.8] mean 898.0  cpu ns/req [3355, 3343, 3348]  p50 us [259, 259, 259]  p99 us [956, 945, 950]  mean p99 950
+  rid    krps [851.6, 857.4, 855.9] mean 855.0  cpu ns/req [3597, 3570, 3580]  p50 us [272, 271, 271]  p99 us [1008, 993, 1010]  mean p99 1004
+allocs
+  none   allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  prov   allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 305, 305]
+  valid  allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  rid    allocs/req [2.004, 2.003, 2.003]  bytes/req [321, 321, 321]

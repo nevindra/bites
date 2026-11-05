@@ -1,0 +1,93 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  830047	      1469 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  849913	      1466 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  646274	      1786 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  680720	      1806 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  673088	      1808 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  670843	      1805 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  609201	      2001 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  597711	      1999 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  607561	      1961 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  617216	      1960 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  571950	      2132 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  572065	      2154 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  617167	      1960 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  611184	      1970 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  614353	      1976 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  618674	      1976 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  563478	      2092 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  580902	      2085 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  613166	      1980 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  617787	      2005 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  485505	      2487 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  476728	      2499 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  491637	      2477 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  477913	      2474 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  388255	      3157 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  370933	      3110 ns/op	     544 B/op	       3 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  815196	      1458 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  819205	      1463 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  688506	      1773 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  685015	      1775 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  681764	      1794 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  684676	      1788 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  592978	      1995 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  597304	      2007 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  626695	      1939 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  629914	      1972 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  565348	      2112 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  576892	      2132 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  610131	      1966 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  628171	      1954 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  604252	      1986 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  595555	      1985 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  585024	      2073 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  586508	      2073 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  622898	      1956 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  617097	      1968 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  469879	      2482 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  480060	      2484 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  483811	      2474 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  482024	      2490 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  390759	      3086 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  380751	      3090 ns/op	     544 B/op	       3 allocs/op
+PASS
+goos: darwin
+goarch: arm64
+pkg: github.com/nevindra/nilo-go
+cpu: Apple M1 Pro
+BenchmarkHotPaths/GET         	  839920	      1484 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/GET         	  817765	      1477 ns/op	     224 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  666238	      1832 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST        	  617468	      1817 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  649694	      1838 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_validate         	  677954	      1832 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  607615	      2061 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_form             	  590420	      2037 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  622141	      1962 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw1              	  610537	      2004 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  564104	      2225 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_mw3              	  550202	      2203 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  585310	      2089 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_providers        	  620059	      1977 ns/op	     368 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  577904	      2054 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_requestid        	  599920	      2003 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  571279	      2114 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_cors             	  569266	      2085 ns/op	     464 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  615007	      1980 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_timeout          	  595508	      2011 ns/op	     432 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  462469	      2607 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_text   	  484212	      2492 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  488234	      2480 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_accesslog_json   	  484147	      2460 ns/op	     352 B/op	       2 allocs/op
+BenchmarkHotPaths/POST_all_four         	  387626	      3229 ns/op	     544 B/op	       3 allocs/op
+BenchmarkHotPaths/POST_all_four         	  378222	      3356 ns/op	     544 B/op	       3 allocs/op
+PASS

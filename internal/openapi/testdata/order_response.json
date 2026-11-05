@@ -1,0 +1,84 @@
+{
+  "components": {
+    "Level": {
+      "enum": [
+        "low",
+        "high"
+      ],
+      "type": "string"
+    },
+    "order": {
+      "properties": {
+        "id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "$ref": "#/components/schemas/orderLine"
+          },
+          "type": "array"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "paid": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "placed": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "replies": {
+          "items": {
+            "$ref": "#/components/schemas/order"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/components/schemas/Level"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "placed",
+        "lines",
+        "paid",
+        "tags",
+        "replies"
+      ],
+      "type": "object"
+    },
+    "orderLine": {
+      "properties": {
+        "qty": {
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sku": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sku",
+        "qty"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/order"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "components": {
+    "Tree": {
+      "properties": {
+        "children": {
+          "items": {
+            "$ref": "#/components/schemas/Tree"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/Tree"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "children",
+        "parent"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/Tree"
+  }
+}

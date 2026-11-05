@@ -1,0 +1,66 @@
+goos: linux
+goarch: amd64
+pkg: github.com/nevindra/nilo-go/docs/research/gzip
+cpu: AMD Ryzen 7 9700X 8-Core Processor
+BenchmarkCompress/1087B-4         	  330072	      3656 ns/op	       257.0 outB	       2 B/op	       0 allocs/op
+BenchmarkCompress/1087B-4         	  337207	      3671 ns/op	       257.0 outB	       2 B/op	       0 allocs/op
+BenchmarkCompress/1087B-4         	  334471	      3656 ns/op	       257.0 outB	       2 B/op	       0 allocs/op
+BenchmarkCompress/1087B-4         	  335876	      3779 ns/op	       257.0 outB	       2 B/op	       0 allocs/op
+BenchmarkCompress/1087B-4         	  333123	      3674 ns/op	       257.0 outB	       2 B/op	       0 allocs/op
+BenchmarkCompress/4111B-4         	  212524	      5805 ns/op	       613.0 outB	       3 B/op	       0 allocs/op
+BenchmarkCompress/4111B-4         	  198009	      5804 ns/op	       613.0 outB	       4 B/op	       0 allocs/op
+BenchmarkCompress/4111B-4         	  187622	      5729 ns/op	       613.0 outB	       4 B/op	       0 allocs/op
+BenchmarkCompress/4111B-4         	  212403	      5815 ns/op	       613.0 outB	       3 B/op	       0 allocs/op
+BenchmarkCompress/4111B-4         	  212053	      5791 ns/op	       613.0 outB	       3 B/op	       0 allocs/op
+BenchmarkCompress/16468B-4        	   87384	     13466 ns/op	      1983 outB	       9 B/op	       0 allocs/op
+BenchmarkCompress/16468B-4        	   89019	     13433 ns/op	      1983 outB	       9 B/op	       0 allocs/op
+BenchmarkCompress/16468B-4        	   81715	     13562 ns/op	      1983 outB	      10 B/op	       0 allocs/op
+BenchmarkCompress/16468B-4        	   91791	     13285 ns/op	      1983 outB	       8 B/op	       0 allocs/op
+BenchmarkCompress/16468B-4        	   86515	     13189 ns/op	      1983 outB	       9 B/op	       0 allocs/op
+BenchmarkCompress/65558B-4        	   29592	     40309 ns/op	      6839 outB	      28 B/op	       0 allocs/op
+BenchmarkCompress/65558B-4        	   29232	     40906 ns/op	      6839 outB	      28 B/op	       0 allocs/op
+BenchmarkCompress/65558B-4        	   28948	     41659 ns/op	      6839 outB	      28 B/op	       0 allocs/op
+BenchmarkCompress/65558B-4        	   28264	     40596 ns/op	      6839 outB	      29 B/op	       0 allocs/op
+BenchmarkCompress/65558B-4        	   29583	     40797 ns/op	      6839 outB	      28 B/op	       0 allocs/op
+BenchmarkRequest/1087B/plain-4    	  605568	      1958 ns/op	      1220 wireB	     192 B/op	       2 allocs/op
+BenchmarkRequest/1087B/plain-4    	  647391	      1926 ns/op	      1220 wireB	     192 B/op	       2 allocs/op
+BenchmarkRequest/1087B/plain-4    	  688045	      1935 ns/op	      1220 wireB	     192 B/op	       2 allocs/op
+BenchmarkRequest/1087B/plain-4    	  568639	      1936 ns/op	      1220 wireB	     192 B/op	       2 allocs/op
+BenchmarkRequest/1087B/plain-4    	  682894	      1980 ns/op	      1220 wireB	     192 B/op	       2 allocs/op
+BenchmarkRequest/1087B/gzip-4     	  187317	      6376 ns/op	       413.0 wireB	     289 B/op	       2 allocs/op
+BenchmarkRequest/1087B/gzip-4     	  189903	      6275 ns/op	       413.0 wireB	     306 B/op	       2 allocs/op
+BenchmarkRequest/1087B/gzip-4     	  191344	      6415 ns/op	       413.0 wireB	     280 B/op	       2 allocs/op
+BenchmarkRequest/1087B/gzip-4     	  185384	      6303 ns/op	       413.0 wireB	     325 B/op	       2 allocs/op
+BenchmarkRequest/1087B/gzip-4     	  188792	      6417 ns/op	       413.0 wireB	     315 B/op	       2 allocs/op
+BenchmarkRequest/4111B/plain-4    	  611965	      2028 ns/op	      4244 wireB	     193 B/op	       2 allocs/op
+BenchmarkRequest/4111B/plain-4    	  588050	      2037 ns/op	      4244 wireB	     193 B/op	       2 allocs/op
+BenchmarkRequest/4111B/plain-4    	  592882	      2037 ns/op	      4244 wireB	     193 B/op	       2 allocs/op
+BenchmarkRequest/4111B/plain-4    	  586885	      2029 ns/op	      4244 wireB	     193 B/op	       2 allocs/op
+BenchmarkRequest/4111B/plain-4    	  579802	      2075 ns/op	      4244 wireB	     193 B/op	       2 allocs/op
+BenchmarkRequest/4111B/gzip-4     	  135676	      8498 ns/op	       769.0 wireB	     321 B/op	       2 allocs/op
+BenchmarkRequest/4111B/gzip-4     	  139651	      8639 ns/op	       769.0 wireB	     277 B/op	       2 allocs/op
+BenchmarkRequest/4111B/gzip-4     	  140390	      8588 ns/op	       769.0 wireB	     300 B/op	       2 allocs/op
+BenchmarkRequest/4111B/gzip-4     	  138922	      8512 ns/op	       769.0 wireB	     283 B/op	       2 allocs/op
+BenchmarkRequest/4111B/gzip-4     	  139477	      8731 ns/op	       769.0 wireB	     318 B/op	       2 allocs/op
+BenchmarkRequest/16468B/plain-4   	  537025	      2218 ns/op	     16602 wireB	     195 B/op	       2 allocs/op
+BenchmarkRequest/16468B/plain-4   	  509246	      2234 ns/op	     16602 wireB	     195 B/op	       2 allocs/op
+BenchmarkRequest/16468B/plain-4   	  558397	      2180 ns/op	     16602 wireB	     195 B/op	       2 allocs/op
+BenchmarkRequest/16468B/plain-4   	  556350	      2164 ns/op	     16602 wireB	     196 B/op	       2 allocs/op
+BenchmarkRequest/16468B/plain-4   	  573624	      2159 ns/op	     16602 wireB	     196 B/op	       2 allocs/op
+BenchmarkRequest/16468B/gzip-4    	   72264	     16167 ns/op	      2140 wireB	     235 B/op	       2 allocs/op
+BenchmarkRequest/16468B/gzip-4    	   73796	     16160 ns/op	      2140 wireB	     258 B/op	       2 allocs/op
+BenchmarkRequest/16468B/gzip-4    	   74917	     16557 ns/op	      2140 wireB	     269 B/op	       2 allocs/op
+BenchmarkRequest/16468B/gzip-4    	   74689	     16032 ns/op	      2140 wireB	     246 B/op	       2 allocs/op
+BenchmarkRequest/16468B/gzip-4    	   70318	     16335 ns/op	      2140 wireB	     294 B/op	       2 allocs/op
+BenchmarkRequest/65558B/plain-4   	  131814	     11026 ns/op	     65692 wireB	   74058 B/op	       5 allocs/op
+BenchmarkRequest/65558B/plain-4   	  101911	     11429 ns/op	     65692 wireB	   74055 B/op	       5 allocs/op
+BenchmarkRequest/65558B/plain-4   	  102902	     11507 ns/op	     65692 wireB	   74053 B/op	       5 allocs/op
+BenchmarkRequest/65558B/plain-4   	  114949	     11098 ns/op	     65692 wireB	   74052 B/op	       5 allocs/op
+BenchmarkRequest/65558B/plain-4   	  110005	     11730 ns/op	     65692 wireB	   74056 B/op	       5 allocs/op
+BenchmarkRequest/65558B/gzip-4    	   24396	     50069 ns/op	      6996 wireB	   76107 B/op	       3 allocs/op
+BenchmarkRequest/65558B/gzip-4    	   24543	     49120 ns/op	      6996 wireB	   76541 B/op	       3 allocs/op
+BenchmarkRequest/65558B/gzip-4    	   24003	     49186 ns/op	      6996 wireB	   77086 B/op	       3 allocs/op
+BenchmarkRequest/65558B/gzip-4    	   24296	     56267 ns/op	      6996 wireB	   80303 B/op	       3 allocs/op
+BenchmarkRequest/65558B/gzip-4    	   24622	     49029 ns/op	      6996 wireB	   76807 B/op	       3 allocs/op
+PASS
+ok  	github.com/nevindra/nilo-go/docs/research/gzip	80.840s

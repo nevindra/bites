@@ -1,0 +1,3 @@
+# Go 1.27 is the minimum
+
+Go 1.27 gives two things the design is built on: **generic methods**, so a route is registered as `r.Get("/users/{id}", users.Get)` with the input and output types inferred (checked with the 1.27.2 compiler on 2026-10-30), and a **stable `encoding/json/v2`**, which `encoding/json` itself now runs on (Go 1.27 release notes, see [`docs/research/std-huma/`](../research/std-huma/report.md)). Supporting an older Go would mean a package-level function `Get(r, …)` in place of the method and a JSON layer that behaves two ways. The cost is that a team on an older toolchain cannot use bites until it upgrades.

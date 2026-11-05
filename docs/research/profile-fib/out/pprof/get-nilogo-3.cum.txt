@@ -1,0 +1,69 @@
+File: nilogo
+Build ID: 62b2e48e0fc80b8b2cf7ed776069a450b2cc57fc
+Type: cpu
+Time: 2026-10-31 11:07:05 WIB
+Duration: 10s, Total samples = 31390ms (313.89%)
+Showing nodes accounting for 23812ms, 75.86% of 31390ms total
+Dropped 397 nodes (cum <= 156.95ms)
+Showing top 60 nodes out of 110
+      flat  flat%   sum%        cum   cum%
+      48ms  0.15%  0.15%    29590ms 94.27%  github.com/nevindra/nilo-go/internal/engine.(*conn).serve
+      36ms  0.11%  0.27%    20216ms 64.40%  github.com/nevindra/nilo-go/internal/engine.(*conn).handle
+       4ms 0.013%  0.28%    18042ms 57.48%  internal/poll.ignoringEINTRIO (inline)
+      36ms  0.11%   0.4%    17902ms 57.03%  syscall.Syscall
+   17634ms 56.18% 56.57%    17634ms 56.18%  internal/runtime/syscall/linux.Syscall6
+     138ms  0.44% 57.01%    17256ms 54.97%  syscall.RawSyscall6
+     130ms  0.41% 57.43%    16380ms 52.18%  github.com/nevindra/nilo-go/internal/engine.(*conn).write
+      40ms  0.13% 57.55%    13832ms 44.06%  net.(*conn).Write
+      12ms 0.038% 57.59%    13790ms 43.93%  net.(*netFD).Write
+      40ms  0.13% 57.72%    13766ms 43.85%  internal/poll.(*FD).Write
+       6ms 0.019% 57.74%    13586ms 43.28%  syscall.Write (inline)
+       8ms 0.025% 57.76%    13580ms 43.26%  syscall.write
+      90ms  0.29% 58.05%     5454ms 17.37%  net.(*conn).Read
+      30ms 0.096% 58.15%     5362ms 17.08%  net.(*netFD).Read
+     180ms  0.57% 58.72%     5266ms 16.78%  internal/poll.(*FD).Read
+     180ms  0.57% 59.29%     4956ms 15.79%  github.com/nevindra/nilo-go/internal/engine.(*conn).awaitRequest
+      10ms 0.032% 59.32%     4390ms 13.99%  syscall.Read (inline)
+      46ms  0.15% 59.47%     4380ms 13.95%  syscall.read
+      70ms  0.22% 59.69%     4220ms 13.44%  github.com/nevindra/nilo-go/internal/engine.(*conn).readHead
+      36ms  0.11% 59.81%     3342ms 10.65%  internal/poll.setDeadlineImpl
+     186ms  0.59% 60.40%     2684ms  8.55%  internal/poll.runtime_pollSetDeadline
+      42ms  0.13% 60.54%     2396ms  7.63%  github.com/nevindra/nilo-go/internal/engine.(*conn).call
+      82ms  0.26% 60.80%     2326ms  7.41%  github.com/nevindra/nilo-go.handler.Serve
+      74ms  0.24% 61.03%     1808ms  5.76%  github.com/nevindra/nilo-go.(*typedRoute[go.shape.struct { Path struct { ID int64 } },go.shape.struct { ID int64 "json:\"id\""; Name string "json:\"name\""; Email string "json:\"email\""; Age int "json:\"age\"" }]).serve
+      14ms 0.045% 61.08%     1736ms  5.53%  net.(*conn).SetReadDeadline
+       2ms 0.0064% 61.08%     1718ms  5.47%  net.(*netFD).SetReadDeadline (inline)
+         0     0% 61.08%     1716ms  5.47%  internal/poll.(*FD).SetReadDeadline (inline)
+       6ms 0.019% 61.10%     1634ms  5.21%  net.(*conn).SetWriteDeadline
+         0     0% 61.10%     1626ms  5.18%  internal/poll.(*FD).SetWriteDeadline (inline)
+         0     0% 61.10%     1626ms  5.18%  net.(*netFD).SetWriteDeadline (inline)
+      34ms  0.11% 61.21%     1436ms  4.57%  runtime.mcall
+      30ms 0.096% 61.31%     1384ms  4.41%  runtime.park_m
+      28ms 0.089% 61.40%     1228ms  3.91%  github.com/nevindra/nilo-go/internal/engine.(*Server).now (inline)
+      44ms  0.14% 61.54%     1224ms  3.90%  github.com/nevindra/nilo-go.(*outPlan).write
+         0     0% 61.54%     1200ms  3.82%  github.com/nevindra/nilo-go/internal/clock.real.Now
+      88ms  0.28% 61.82%     1200ms  3.82%  time.Now
+     144ms  0.46% 62.27%     1136ms  3.62%  runtime.(*timer).modify
+      34ms  0.11% 62.38%     1130ms  3.60%  runtime.schedule
+    1112ms  3.54% 65.93%     1112ms  3.54%  time.runtimeNow
+    1028ms  3.27% 69.20%     1028ms  3.27%  runtime.nanotime (inline)
+      22ms  0.07% 69.27%      954ms  3.04%  runtime.findRunnable
+      68ms  0.22% 69.49%      874ms  2.78%  runtime.mallocgc
+     214ms  0.68% 70.17%      784ms  2.50%  github.com/nevindra/nilo-go/internal/h1.ParseHead
+      20ms 0.064% 70.23%      710ms  2.26%  github.com/nevindra/nilo-go/internal/jsoncodec.(*Encoder).Append
+     112ms  0.36% 70.59%      690ms  2.20%  github.com/nevindra/nilo-go/internal/jsoncodec.appendValue
+       4ms 0.013% 70.60%      662ms  2.11%  runtime.lock (inline)
+       6ms 0.019% 70.62%      658ms  2.10%  runtime.lockWithRank (inline)
+     594ms  1.89% 72.51%      652ms  2.08%  runtime.lock2
+       2ms 0.0064% 72.52%      650ms  2.07%  runtime.systemstack
+     220ms   0.7% 73.22%      640ms  2.04%  github.com/nevindra/nilo-go/internal/jsoncodec.appendStruct
+      12ms 0.038% 73.26%      630ms  2.01%  runtime.(*timer).maybeAdd
+      48ms  0.15% 73.41%      612ms  1.95%  runtime.netpoll
+      20ms 0.064% 73.48%      532ms  1.69%  runtime.makeslice
+      10ms 0.032% 73.51%      526ms  1.68%  github.com/nevindra/nilo-go/internal/wire.(*Slab).Init (inline)
+       4ms 0.013% 73.52%      520ms  1.66%  runtime.unlock (inline)
+         0     0% 73.52%      516ms  1.64%  internal/runtime/syscall/linux.EpollWait
+       4ms 0.013% 73.53%      516ms  1.64%  runtime.unlockWithRank (inline)
+     462ms  1.47% 75.00%      512ms  1.63%  runtime.unlock2
+     246ms  0.78% 75.79%      506ms  1.61%  runtime.(*timer).unlock (inline)
+      22ms  0.07% 75.86%      498ms  1.59%  time.Until

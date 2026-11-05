@@ -1,0 +1,49 @@
+{
+  "components": {
+    "budgetList": {
+      "additionalProperties": false,
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/components/schemas/orderLine"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "orderLine": {
+      "additionalProperties": false,
+      "properties": {
+        "qty": {
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sku": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sku",
+        "qty"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/budgetList"
+  }
+}

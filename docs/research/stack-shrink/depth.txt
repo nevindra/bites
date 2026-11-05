@@ -1,0 +1,53 @@
+== none
+TOTAL 3944
+     16 github.com/nevindra/bites/internal/engine.(*conn).serve
+    344 github.com/nevindra/bites/internal/engine.(*conn).handle
+     72 github.com/nevindra/bites/internal/engine.(*conn).call
+    760 github.com/nevindra/bites.handler.Serve
+     -1 github.com/nevindra/bites.(*typedRoute[go.shape.struct { Path struct { ID int64 } },go.shape.struct { ID int64 "json:\"id\""; Name string "json:\"name\""; Email string "json:\"email\""; Age int "json:\"age\"" }]).serve
+    128 github.com/nevindra/bites.(*inputPlan).decode
+    440 github.com/nevindra/bites.decodePath
+    824 github.com/nevindra/bites.(*textRun).offer
+      0 runtime.newstack
+    240 runtime.copystack
+    128 runtime.stackalloc
+     56 runtime.stackcacherefill
+     56 runtime.stackpoolalloc
+     32 runtime.(*mheap).allocManual
+    168 runtime.(*mheap).allocSpan
+     64 runtime.(*pageAlloc).alloc
+    296 runtime.(*pageAlloc).find
+     32 runtime.(*pallocBits).find
+== mw3
+TOTAL 7728
+     16 github.com/nevindra/bites/internal/engine.(*conn).serve
+    344 github.com/nevindra/bites/internal/engine.(*conn).handle
+     72 github.com/nevindra/bites/internal/engine.(*conn).call
+    760 github.com/nevindra/bites.handler.Serve
+    288 github.com/nevindra/bites.(*App).serveChain
+    208 github.com/nevindra/bites.(*chainRun).step
+    368 github.com/nevindra/bites.(*chainRun).call
+    312 main.routeMiddleware.func1
+    200 github.com/nevindra/bites.Next.Call
+    208 github.com/nevindra/bites.(*chainRun).step
+    368 github.com/nevindra/bites.(*chainRun).call
+    312 main.routeMiddleware.func1
+    200 github.com/nevindra/bites.Next.Call
+    208 github.com/nevindra/bites.(*chainRun).step
+    368 github.com/nevindra/bites.(*chainRun).call
+    312 main.routeMiddleware.func1
+    200 github.com/nevindra/bites.Next.Call
+    208 github.com/nevindra/bites.(*chainRun).step
+     -1 github.com/nevindra/bites.(*typedRoute[go.shape.struct { Path struct { ID int64 } },go.shape.struct { ID int64 "json:\"id\""; Name string "json:\"name\""; Email string "json:\"email\""; Age int "json:\"age\"" }]).serve
+    128 github.com/nevindra/bites.(*inputPlan).decode
+    440 github.com/nevindra/bites.decodePath
+    824 github.com/nevindra/bites.(*textRun).offer
+     56 github.com/nevindra/bites/internal/wire.(*Slab).Unescape
+      0 runtime.newstack
+    240 runtime.copystack
+    112 runtime.adjustframe
+    200 runtime.(*stkframe).getStackMap
+     48 runtime.pcdatavalue
+    200 runtime.pcvalue
+      0 runtime.funcInfo.entry
+     48 runtime.(*moduledata).textAddr

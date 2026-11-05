@@ -1,0 +1,54 @@
+{
+  "components": {
+    "Level": {
+      "enum": [
+        "low",
+        "high"
+      ],
+      "type": "string"
+    },
+    "withPresence": {
+      "additionalProperties": false,
+      "properties": {
+        "null": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "opt": {
+          "type": "string"
+        },
+        "patch": {
+          "format": "int32",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "plain": {
+          "type": "string"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/Level"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "plain",
+        "null",
+        "status"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/withPresence"
+  }
+}

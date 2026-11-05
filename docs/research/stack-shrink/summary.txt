@@ -1,0 +1,39 @@
+get
+  before-none  krps [1005.6, 1009.1, 1014.3] median 1009.1  cpu ns/req [2816, 2794, 2810]  p50 us [231, 230, 230]  p99 us [875, 861, 850]  median p99 861  errors 0
+  before-mw1   krps [957.1, 949.4, 970.8] median 957.1  cpu ns/req [3031, 3048, 2989]  p50 us [243, 244, 241]  p99 us [908, 928, 876]  median p99 908  errors 0
+  before-mw3   krps [914.7, 920.4, 924.8] median 920.4  cpu ns/req [3223, 3205, 3186]  p50 us [252, 251, 250]  p99 us [1024, 1008, 1002]  median p99 1008  errors 0
+  after-none   krps [1013.0, 1031.7, 1037.3] median 1031.7  cpu ns/req [2778, 2751, 2716]  p50 us [232, 231, 229]  p99 us [733, 683, 677]  median p99 683  errors 0
+  after-mw1    krps [961.4, 973.0, 966.4] median 966.4  cpu ns/req [3001, 2962, 2963]  p50 us [246, 244, 243]  p99 us [754, 733, 760]  median p99 754  errors 0
+  after-mw3    krps [940.8, 927.8, 942.4] median 940.8  cpu ns/req [3088, 3104, 3087]  p50 us [252, 253, 252]  p99 us [744, 781, 744]  median p99 744  errors 0
+post
+  before-none  krps [890.4, 882.2, 876.7] median 882.2  cpu ns/req [3353, 3378, 3358]  p50 us [259, 259, 259]  p99 us [993, 1011, 1026]  median p99 1011  errors 0
+  before-mw1   krps [837.3, 847.9, 854.9] median 847.9  cpu ns/req [3621, 3582, 3557]  p50 us [273, 272, 271]  p99 us [1066, 1030, 1006]  median p99 1030  errors 0
+  before-mw3   krps [793.9, 813.4, 814.1] median 813.4  cpu ns/req [3849, 3801, 3806]  p50 us [282, 281, 280]  p99 us [1224, 1153, 1166]  median p99 1166  errors 0
+  after-none   krps [892.9, 908.9, 920.9] median 908.9  cpu ns/req [3316, 3284, 3238]  p50 us [262, 261, 259]  p99 us [833, 785, 756]  median p99 785  errors 0
+  after-mw1    krps [860.2, 863.3, 868.3] median 863.3  cpu ns/req [3523, 3498, 3483]  p50 us [275, 273, 273]  p99 us [829, 825, 813]  median p99 825  errors 0
+  after-mw3    krps [838.8, 819.3, 853.5] median 838.8  cpu ns/req [3641, 3670, 3583]  p50 us [282, 284, 279]  p99 us [834, 916, 799]  median p99 834  errors 0
+allocs
+  before-none  allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  before-mw1   allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 305]
+  before-mw3   allocs/req [2.004, 2.004, 2.004]  bytes/req [304, 305, 305]
+  after-none   allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  after-mw1    allocs/req [2.003, 2.003, 2.003]  bytes/req [305, 304, 304]
+  after-mw3    allocs/req [2.003, 2.003, 2.004]  bytes/req [305, 304, 305]
+stack bytes a goroutine under load and gc cycles a second, a pair a round
+  get
+    before-none  [(12047, 97), (12168, 96), (12288, 98)]
+    before-mw1   [(12047, 96), (11927, 97), (12288, 100)]
+    before-mw3   [(19275, 92), (19275, 94), (19396, 94)]
+    after-none   [(10360, 81), (9879, 82), (10120, 82)]
+    after-mw1    [(9999, 80), (10120, 81), (10360, 79)]
+    after-mw3    [(17709, 60), (17830, 58), (17830, 60)]
+  post
+    before-none  [(12047, 134), (12168, 132), (12047, 131)]
+    before-mw1   [(12047, 132), (12047, 134), (12168, 135)]
+    before-mw3   [(19034, 125), (19155, 126), (19275, 129)]
+    after-none   [(10360, 112), (10240, 114), (9999, 115)]
+    after-mw1    [(10120, 111), (9999, 110), (10240, 113)]
+    after-mw3    [(17709, 80), (17709, 79), (17709, 82)]
+idle
+  before-none  {"conns_n1": 10000, "conns_n2": 20000, "rss0": 14880768, "rss_n1": 148135936, "rss_n2": 169091072, "stats0": {"gomaxprocs": 4, "goroutines": 4, "heap_alloc": 306120, "heap_inuse": 1245184, "heap_objects": 306040, "mallocs": 1771, "num_gc": 2, "stack_inuse": 491520, "stacks": 491520, "sys": 13269256, "total_alloc": 427376}, "stats_n1": {"gomaxprocs": 4, "goroutines": 5, "heap_alloc": 14425736, "heap_inuse": 16982016, "heap_objects": 14421712, "mallocs": 304767, "num_gc": 9, "stack_inuse": 688128, "stacks": 688128, "sys": 142965032, "total_alloc": 70729648}, "stats_n2": {"gomaxprocs": 4, "goroutines": 5, "heap_alloc": 23827672, "heap_inuse": 26763264, "heap_objects": 23827592, "mallocs": 605488, "num_gc": 13, "stack_inuse": 655360, "stacks": 655360, "sys": 166041896, "total_alloc": 138395848}}
+  after-none   {"conns_n1": 10000, "conns_n2": 20000, "rss0": 14848000, "rss_n1": 164827136, "rss_n2": 169943040, "stats0": {"gomaxprocs": 4, "goroutines": 4, "heap_alloc": 305552, "heap_inuse": 1024000, "heap_objects": 305472, "mallocs": 1770, "num_gc": 2, "stack_inuse": 524288, "stacks": 524288, "sys": 9337096, "total_alloc": 426680}, "stats_n1": {"gomaxprocs": 4, "goroutines": 5, "heap_alloc": 14503808, "heap_inuse": 16875520, "heap_objects": 14503728, "mallocs": 304776, "num_gc": 10, "stack_inuse": 655360, "stacks": 655360, "sys": 159611176, "total_alloc": 70976000}, "stats_n2": {"gomaxprocs": 4, "goroutines": 5, "heap_alloc": 23829888, "heap_inuse": 26550272, "heap_objects": 23829808, "mallocs": 605392, "num_gc": 14, "stack_inuse": 720896, "stacks": 720896, "sys": 165443880, "total_alloc": 138484472}}

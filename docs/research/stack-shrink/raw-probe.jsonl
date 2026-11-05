@@ -1,0 +1,6 @@
+{"cpu_ns_per_req": 3142.9774636480734, "errors": 0, "p50_us": 248, "p999_us": 1564, "p99_us": 974, "peak_rss_sampled": 26677248, "reqs": 9389186, "rps": 938345.5715955107, "vmhwm": 26959872, "variant": "base-mw3-def"}
+{"cpu_ns_per_req": 3029.2504716819694, "errors": 0, "p50_us": 248, "p999_us": 1418, "p99_us": 727, "peak_rss_sampled": 24997888, "reqs": 9612939, "rps": 960329.2830387783, "vmhwm": 24956928, "variant": "base-mw3-noshrink"}
+{"cpu_ns_per_req": 2740.0549054811536, "errors": 0, "p50_us": 227, "p999_us": 1401, "p99_us": 809, "peak_rss_sampled": 22978560, "reqs": 10346508, "rps": 1034024.8738265291, "vmhwm": 22700032, "variant": "base-none-def"}
+{"cpu_ns_per_req": 2683.633351856151, "errors": 0, "p50_us": 227, "p999_us": 1445, "p99_us": 674, "peak_rss_sampled": 23162880, "reqs": 10496963, "rps": 1048925.262206916, "vmhwm": 22941696, "variant": "base-none-noshrink"}
+{"cpu_ns_per_req": 3141.1066694773185, "errors": 0, "p50_us": 255, "p999_us": 1520, "p99_us": 744, "peak_rss_sampled": 27340800, "reqs": 9340657, "rps": 933336.5820354631, "vmhwm": 27213824, "variant": "pad-mw3"}
+{"cpu_ns_per_req": 2789.233108265768, "errors": 0, "p50_us": 233, "p999_us": 1547, "p99_us": 706, "peak_rss_sampled": 24666112, "reqs": 10178425, "rps": 1017016.1370641432, "vmhwm": 24977408, "variant": "pad-none"}

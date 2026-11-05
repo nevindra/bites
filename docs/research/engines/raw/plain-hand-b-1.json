@@ -1,0 +1,1 @@
+{"errors":0,"p50_us":173,"p999_us":2333,"p99_us":529,"peak_rss_sampled":9654272,"reqs":13495398,"rps":1348491.707879259,"stats":{"gcsys":1715472,"gomaxprocs":4,"goroutines":6,"heap_alloc":491896,"heap_inuse":1122304,"mallocs":2841,"max_goroutines":259,"mspan_inuse":46080,"num_gc":0,"other_sys":1190447,"stack_inuse":1081344,"sys":8608008,"total_alloc":491896},"vmhwm":9654272}

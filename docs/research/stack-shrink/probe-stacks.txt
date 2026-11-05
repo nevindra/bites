@@ -1,0 +1,6 @@
+base-mw3-def stack/goroutine median 19516 B [10722-25660], gc 98/s
+base-mw3-noshrink stack/goroutine median 17709 B [17589-17709], gc 93/s
+base-none-def stack/goroutine median 12047 B [6385-13854], gc 99/s
+base-none-noshrink stack/goroutine median 9999 B [9879-9999], gc 96/s
+pad-mw3 stack/goroutine median 17709 B [17468-17950], gc 59/s
+pad-none stack/goroutine median 10120 B [10120-10360], gc 81/s

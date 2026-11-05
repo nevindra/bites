@@ -1,0 +1,8 @@
+none-r1   GC cycles/s 98  mark wall ms median 0.30  assist cpu ms median 0.73  live heap MB median 1  goal 4 MB
+  last line: gc 1283 @13.573s 2%: 0.021+0.32+0.005 ms clock, 0.085+0.82/0.30/0+0.021 ms cpu, 3->3->1 MB, 4 MB goal, 0 MB stacks, 0 MB globals, 4 P
+bare1-r1  GC cycles/s 139  mark wall ms median 0.29  assist cpu ms median 0.72  live heap MB median 1  goal 4 MB
+  last line: gc 1816 @13.568s 3%: 0.013+0.30+0.005 ms clock, 0.054+0.71/0.28/0+0.022 ms cpu, 3->3->1 MB, 4 MB goal, 0 MB stacks, 0 MB globals, 4 P
+none-r2   GC cycles/s 99  mark wall ms median 0.30  assist cpu ms median 0.73  live heap MB median 1  goal 4 MB
+  last line: gc 1285 @13.562s 2%: 0.027+0.33+0.007 ms clock, 0.10+0.84/0.31/0+0.031 ms cpu, 3->3->1 MB, 4 MB goal, 0 MB stacks, 0 MB globals, 4 P
+bare1-r2  GC cycles/s 140  mark wall ms median 0.30  assist cpu ms median 0.73  live heap MB median 1  goal 4 MB
+  last line: gc 1824 @13.565s 3%: 0.027+0.29+0.005 ms clock, 0.11+0.71/0.28/0+0.022 ms cpu, 4->4->1 MB, 4 MB goal, 0 MB stacks, 0 MB globals, 4 P

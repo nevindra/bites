@@ -1,0 +1,186 @@
+goos: linux
+goarch: amd64
+pkg: encodersbench
+cpu: AMD Ryzen 7 9700X 8-Core Processor             
+BenchmarkEncode/gzip-1/1087B-16         	   68299	      3474 ns/op	       257.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/1087B-16         	   67930	      3487 ns/op	       257.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/1087B-16         	   67959	      3487 ns/op	       257.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/4111B-16         	   44005	      5460 ns/op	       613.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/4111B-16         	   43947	      5473 ns/op	       613.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/4111B-16         	   43602	      5542 ns/op	       613.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/16468B-16        	   19029	     12563 ns/op	      1983 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/16468B-16        	   19082	     12513 ns/op	      1983 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/16468B-16        	   19023	     12584 ns/op	      1983 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/65558B-16        	    6034	     39016 ns/op	      6839 outB	      12 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/65558B-16        	    6106	     38528 ns/op	      6839 outB	      12 B/op	       0 allocs/op
+BenchmarkEncode/gzip-1/65558B-16        	    6003	     39056 ns/op	      6839 outB	      12 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/1087B-16   	   85060	      2821 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/1087B-16   	   84537	      2838 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/1087B-16   	   84848	      2830 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16   	   47824	      5009 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16   	   47331	      5018 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16   	   47857	      5076 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16  	   18632	     12916 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16  	   18379	     12877 ns/op	      1516 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16  	   18513	     12884 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16  	    5392	     42469 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16  	    5304	     43103 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16  	    5122	     42560 ns/op	      4833 outB	      14 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16   	   77230	      3102 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16   	   76689	      3091 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16   	   76882	      3095 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16   	   43129	      5668 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16   	   42855	      5566 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16   	   42804	      5566 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16  	   16851	     14149 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16  	   16657	     14158 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16  	   17018	     14345 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16  	    5042	     46096 ns/op	      4799 outB	      14 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16  	    5150	     44915 ns/op	      4799 outB	      14 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16  	    5276	     45421 ns/op	      4799 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/1087B-16   	   37372	      6365 ns/op	       318.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/1087B-16   	   37736	      6470 ns/op	       318.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/1087B-16   	   37686	      6353 ns/op	       318.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/4111B-16   	   21976	     10960 ns/op	       763.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/4111B-16   	   21914	     11091 ns/op	       763.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/4111B-16   	   21918	     10930 ns/op	       763.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/16468B-16  	    8380	     28890 ns/op	      2443 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/16468B-16  	    7572	     28610 ns/op	      2443 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/16468B-16  	    8337	     28514 ns/op	      2443 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/65558B-16  	    4012	     60410 ns/op	      7987 outB	      18 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/65558B-16  	    3891	     60521 ns/op	      7987 outB	      18 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-0/65558B-16  	    3865	     59998 ns/op	      7987 outB	      19 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/1087B-16   	   49375	      4920 ns/op	       238.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/1087B-16   	   48748	      4865 ns/op	       238.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/1087B-16   	   49286	      4871 ns/op	       238.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/4111B-16   	   22765	     10397 ns/op	       572.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/4111B-16   	   23091	     10396 ns/op	       572.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/4111B-16   	   23098	     10413 ns/op	       572.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/16468B-16  	    8192	     29267 ns/op	      2002 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/16468B-16  	    8095	     29451 ns/op	      2002 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/16468B-16  	    8140	     29109 ns/op	      2002 outB	       2 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/65558B-16  	    2524	     95005 ns/op	      5278 outB	      29 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/65558B-16  	    2469	     96209 ns/op	      5278 outB	      29 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-1/65558B-16  	    2506	     95496 ns/op	      5278 outB	      29 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/1087B-16   	   15690	     15208 ns/op	       205.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/1087B-16   	   15586	     15334 ns/op	       205.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/1087B-16   	   15895	     15117 ns/op	       205.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/4111B-16   	    8062	     29619 ns/op	       426.0 outB	       3 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/4111B-16   	    7927	     29969 ns/op	       426.0 outB	       3 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/4111B-16   	    8071	     29364 ns/op	       426.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/16468B-16  	    2996	     79719 ns/op	      1286 outB	      15 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/16468B-16  	    3009	     79512 ns/op	      1286 outB	      15 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/16468B-16  	    2936	     80076 ns/op	      1286 outB	      15 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/65558B-16  	     945	    253330 ns/op	      3730 outB	     127 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/65558B-16  	     948	    252996 ns/op	      3730 outB	     126 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-4/65558B-16  	     946	    257317 ns/op	      3730 outB	     126 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/1087B-16   	   14598	     16257 ns/op	       196.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/1087B-16   	   15036	     16018 ns/op	       196.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/1087B-16   	   14752	     16031 ns/op	       196.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/4111B-16   	    6993	     32242 ns/op	       384.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/4111B-16   	    7377	     31856 ns/op	       384.0 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/4111B-16   	    7442	     32192 ns/op	       384.0 outB	       3 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/16468B-16  	    2564	     94826 ns/op	      1094 outB	      17 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/16468B-16  	    2533	     93281 ns/op	      1094 outB	      10 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/16468B-16  	    2324	     93573 ns/op	      1094 outB	      19 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/65558B-16  	     733	    326037 ns/op	      2941 outB	     162 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/65558B-16  	     736	    321811 ns/op	      2941 outB	     161 B/op	       0 allocs/op
+BenchmarkEncode/br-classic-5/65558B-16  	     728	    322784 ns/op	      2941 outB	     163 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/1087B-16        	   62898	      3826 ns/op	       222.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/1087B-16        	   64684	      3742 ns/op	       222.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/1087B-16        	   63982	      3728 ns/op	       222.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/4111B-16        	   41614	      5707 ns/op	       452.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/4111B-16        	   41740	      5734 ns/op	       452.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/4111B-16        	   41702	      5777 ns/op	       452.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/16468B-16       	   17032	     14037 ns/op	      1381 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/16468B-16       	   16946	     14033 ns/op	      1381 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/16468B-16       	   16994	     14156 ns/op	      1381 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/65558B-16       	    5438	     44654 ns/op	      3959 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/65558B-16       	    5186	     43991 ns/op	      3959 outB	      14 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-1/65558B-16       	    5383	     44331 ns/op	      3959 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/1087B-16        	    8587	     27240 ns/op	       226.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/1087B-16        	    8572	     27224 ns/op	       226.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/1087B-16        	    8767	     26812 ns/op	       226.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/4111B-16        	    6885	     34442 ns/op	       473.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/4111B-16        	    6858	     34414 ns/op	       473.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/4111B-16        	    6721	     35192 ns/op	       473.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/16468B-16       	    3627	     64547 ns/op	      1364 outB	       5 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/16468B-16       	    3661	     64583 ns/op	      1364 outB	       5 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/16468B-16       	    3690	     64387 ns/op	      1364 outB	       4 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/65558B-16       	    1305	    183257 ns/op	      3791 outB	      56 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/65558B-16       	    1302	    186234 ns/op	      3791 outB	      56 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-4/65558B-16       	    1305	    182819 ns/op	      3791 outB	      56 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/1087B-16        	   10000	     20580 ns/op	       220.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/1087B-16        	   10000	     20894 ns/op	       220.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/1087B-16        	   10000	     21597 ns/op	       220.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/4111B-16        	    6326	     36721 ns/op	       451.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/4111B-16        	    6484	     36809 ns/op	       451.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/4111B-16        	    6252	     37192 ns/op	       451.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/16468B-16       	    2263	    103050 ns/op	      1307 outB	       8 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/16468B-16       	    2269	    102385 ns/op	      1307 outB	       8 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/16468B-16       	    2290	    104881 ns/op	      1307 outB	       8 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/65558B-16       	     618	    379848 ns/op	      3973 outB	     119 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/65558B-16       	     615	    381668 ns/op	      3973 outB	     119 B/op	       0 allocs/op
+BenchmarkEncode/br-v2-5/65558B-16       	     626	    390122 ns/op	      3973 outB	     117 B/op	       0 allocs/op
+PASS
+ok  	encodersbench	33.781s
+    encoders_test.go:156: gzip-1: 815370 bytes held per state
+    encoders_test.go:156: zstd-fastest (one EncodeAll state): 9013962 bytes held per state
+    encoders_test.go:156: br-v2-1: 2577904 bytes held per state
+    encoders_test.go:156: gzip-1: 815457 bytes held per state
+    encoders_test.go:156: zstd-fastest (one EncodeAll state): 9013873 bytes held per state
+    encoders_test.go:156: br-v2-1: 2577906 bytes held per state
+    encoders_test.go:156: gzip-1: 815457 bytes held per state
+    encoders_test.go:156: zstd-fastest (one EncodeAll state): 9013966 bytes held per state
+    encoders_test.go:156: br-v2-1: 2577905 bytes held per state
+
+# second run, zstd rows only, with zstd-fastest-lowmem-1M (the module's settings)
+goos: linux
+goarch: amd64
+pkg: encodersbench
+cpu: AMD Ryzen 7 9700X 8-Core Processor             
+BenchmarkEncode/zstd-fastest/1087B-16         	   84522	      2831 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/1087B-16         	   84763	      2836 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/1087B-16         	   84344	      2850 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16         	   47763	      5111 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16         	   47499	      5032 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/4111B-16         	   47527	      5066 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16        	   18524	     12990 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16        	   18458	     13064 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/16468B-16        	   18553	     12876 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16        	    5641	     42992 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16        	    5244	     42500 ns/op	      4833 outB	      14 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest/65558B-16        	    5637	     43106 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16         	   75648	      3125 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16         	   75091	      3122 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/1087B-16         	   75879	      3159 ns/op	       235.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16         	   42075	      5650 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16         	   43038	      5601 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/4111B-16         	   42381	      5718 ns/op	       461.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16        	   16908	     14889 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16        	   16718	     14526 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/16468B-16        	   16550	     14296 ns/op	      1523 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16        	    5311	     46157 ns/op	      4799 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16        	    4839	     46090 ns/op	      4799 outB	      15 B/op	       0 allocs/op
+BenchmarkEncode/zstd-default/65558B-16        	    4914	     45656 ns/op	      4799 outB	      15 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/1087B-16         	   83914	      2844 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/1087B-16         	   84516	      2809 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/1087B-16         	   85419	      2855 ns/op	       237.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/4111B-16         	   47362	      5054 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/4111B-16         	   46860	      5143 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/4111B-16         	   47403	      5047 ns/op	       458.0 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/16468B-16        	   18472	     13168 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/16468B-16        	   18598	     12952 ns/op	      1516 outB	       0 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/16468B-16        	   18283	     12922 ns/op	      1516 outB	       1 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/65558B-16        	    5496	     42658 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/65558B-16        	    5509	     42733 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+BenchmarkEncode/zstd-fastest-lowmem-1M/65558B-16        	    5601	     42736 ns/op	      4833 outB	      13 B/op	       0 allocs/op
+PASS
+ok  	encodersbench	10.641s
+
+# TestTheMemoryEachEncoderStateHolds, with the zstd variants
+    encoders_test.go:166: gzip-1: 815457 bytes held per state
+    encoders_test.go:166: zstd-fastest (one EncodeAll state): 9013964 bytes held per state
+    encoders_test.go:166: zstd-fastest, 1 MiB window, lower memory: 1564709 bytes held per state
+    encoders_test.go:166: zstd-fastest, lower memory: 4710434 bytes held per state
+    encoders_test.go:166: br-v2-1: 2577819 bytes held per state

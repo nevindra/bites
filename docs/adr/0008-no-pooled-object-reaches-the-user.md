@@ -1,0 +1,7 @@
+# No pooled or reused object ever reaches the user's code
+
+Nothing a handler can hold (its input value, a string inside it, a byte slice of the body, the context it is given) is reused for another request. Text read from the request is copied into one buffer allocated for that request and never returned to a pool; strings in the input point into it, so the garbage collector keeps it alive for exactly as long as anything refers to it. That costs one allocation a request and asks the user to remember no rule.
+
+**Why it is a hard rule:** Gin, Echo and Fiber all hand a goroutine that outlives its handler the next request's data, silently, and `-race` did not report it ([`docs/research/gin-echo/`](../research/gin-echo/report.md), [`docs/research/fiber/`](../research/fiber/report.md)). Fiber's `Immutable` setting is off by default and did not protect `Body()`, and Fiber shipped the same bug in its own binder (#4534). fib turns reuse on by default and its guide says the bug is "silently swallowed" ([`docs/research/fib.md`](../research/fib.md)).
+
+**Considered:** pooling request objects with a documented lifetime rule, as fasthttp, Fiber, Hertz and fib do. Rejected because the rule is broken by correct-looking code and the failure is wrong data rather than a crash. A convenience or a speed-up that needs a pooled object to reach the user does not ship. The engine may pool what the user never sees (read buffers, parser state).

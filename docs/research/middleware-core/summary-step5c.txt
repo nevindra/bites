@@ -1,0 +1,21 @@
+get
+  base    krps [899.2, 891.6, 888.8] mean 893.2  cpu ns/req [3437, 3475, 3484]  p99 us [733, 742, 744]  errors 0  dropped []
+  s5mw3   krps [791.3, 783.2, 782.9] mean 785.8  cpu ns/req [4049, 4091, 4105]  p99 us [949, 964, 968]  errors 0  dropped []
+  after   krps [893.0, 891.7, 886.4] mean 890.4  cpu ns/req [3462, 3466, 3495]  p99 us [737, 738, 741]  errors 0  dropped []
+  mw1     krps [847.3, 848.0, 847.6] mean 847.7  cpu ns/req [3710, 3722, 3709]  p99 us [897, 871, 877]  errors 0  dropped []
+  mw3     krps [818.9, 817.1, 816.6] mean 817.5  cpu ns/req [3875, 3876, 3887]  p99 us [869, 886, 887]  errors 0  dropped []
+  bare3   krps [839.2, 833.9, 838.0] mean 837.0  cpu ns/req [3766, 3793, 3775]  p99 us [861, 887, 875]  errors 0  dropped []
+post
+  base    krps [744.7, 740.6, 738.8] mean 741.4  cpu ns/req [4358, 4394, 4388]  p99 us [896, 900, 905]  errors 0  dropped []
+  s5mw3   krps [636.0, 632.0, 632.6] mean 633.5  cpu ns/req [5287, 5311, 5314]  p99 us [1264, 1282, 1278]  errors 0  dropped []
+  after   krps [736.0, 738.2, 736.5] mean 736.9  cpu ns/req [4408, 4405, 4421]  p99 us [909, 910, 902]  errors 0  dropped []
+  mw1     krps [694.2, 694.7, 695.4] mean 694.8  cpu ns/req [4721, 4719, 4709]  p99 us [1123, 1119, 1119]  errors 0  dropped []
+  mw3     krps [677.1, 673.4, 676.6] mean 675.7  cpu ns/req [4887, 4902, 4890]  p99 us [1108, 1120, 1106]  errors 0  dropped []
+  bare3   krps [692.0, 689.6, 692.5] mean 691.4  cpu ns/req [4764, 4789, 4753]  p99 us [1105, 1094, 1089]  errors 0  dropped []
+allocs
+  base    allocs/req [2.007, 2.007, 2.006]  bytes/req [321, 321, 321]
+  s5mw3   allocs/req [2.009, 2.006, 2.008]  bytes/req [450, 449, 450]
+  after   allocs/req [2.006, 2.007, 2.005]  bytes/req [321, 321, 321]
+  mw1     allocs/req [2.006, 2.006, 2.007]  bytes/req [321, 321, 321]
+  mw3     allocs/req [2.007, 2.006, 2.007]  bytes/req [321, 321, 321]
+  bare3   allocs/req [2.007, 2.007, 2.008]  bytes/req [321, 321, 322]

@@ -1,0 +1,28 @@
+{
+  "components": {
+    "budgetBody": {
+      "additionalProperties": false,
+      "properties": {
+        "age": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "email": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "email",
+        "age"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/budgetBody"
+  }
+}

@@ -1,0 +1,69 @@
+File: fib
+Build ID: 07e2a8d5b39e7ca40f0819a755ddb74fc39235f2
+Type: cpu
+Time: 2026-10-31 11:06:49 WIB
+Duration: 10s, Total samples = 28932ms (289.31%)
+Showing nodes accounting for 20486ms, 70.81% of 28932ms total
+Dropped 466 nodes (cum <= 144.66ms)
+Showing top 60 nodes out of 117
+      flat  flat%   sum%        cum   cum%
+      20ms 0.069% 0.069%    27700ms 95.74%  github.com/lesismal/fib/taskpool.(*adaptivePool).work
+         0     0% 0.069%    27700ms 95.74%  github.com/lesismal/fib/taskpool.(*adaptivePool).worker
+       8ms 0.028% 0.097%    27422ms 94.78%  github.com/lesismal/fib/taskpool.(*executor).call
+      32ms  0.11%  0.21%    27408ms 94.73%  github.com/lesismal/fib.(*Connection).RunTask
+     146ms   0.5%  0.71%    27246ms 94.17%  github.com/lesismal/fib.(*Connection).process
+      20ms 0.069%  0.78%    27016ms 93.38%  github.com/lesismal/fib.(*Connection).readRound
+      58ms   0.2%  0.98%    15754ms 54.45%  syscall.RawSyscall6
+   15706ms 54.29% 55.27%    15706ms 54.29%  internal/runtime/syscall/linux.Syscall6
+      28ms 0.097% 55.36%    15318ms 52.94%  github.com/lesismal/fib/internal/sys.rawSockIO6
+      64ms  0.22% 55.59%    14116ms 48.79%  github.com/lesismal/fib.(*Connection).uncork
+      82ms  0.28% 55.87%    14042ms 48.53%  github.com/lesismal/fib.(*Connection).flushLocked
+      18ms 0.062% 55.93%    13524ms 46.74%  github.com/lesismal/fib.(*Connection).sysWrite
+      18ms 0.062% 55.99%    13502ms 46.67%  github.com/lesismal/fib/internal/sys.Write
+     140ms  0.48% 56.48%    12880ms 44.52%  github.com/lesismal/fib.(*Connection).readLoop
+      20ms 0.069% 56.55%    10662ms 36.85%  github.com/lesismal/fib/http.(*ServerHandler).OnData
+     282ms  0.97% 57.52%    10632ms 36.75%  github.com/lesismal/fib/http.(*ServerHandler).drive
+       2ms 0.0069% 57.53%     4790ms 16.56%  github.com/lesismal/fib/http.serveRequest (inline)
+      10ms 0.035% 57.56%     4788ms 16.55%  github.com/lesismal/fib/http.serveRequestOn
+       8ms 0.028% 57.59%     4586ms 15.85%  github.com/lesismal/fib/http.HandlerFunc.ServeHTTP
+      20ms 0.069% 57.66%     4578ms 15.82%  main.handle
+     112ms  0.39% 58.05%     4516ms 15.61%  main.post
+      36ms  0.12% 58.17%     3016ms 10.42%  github.com/lesismal/fib/http.(*Parser).feedBorrowed
+     136ms  0.47% 58.64%     2942ms 10.17%  github.com/lesismal/fib/http.(*Parser).feedOne
+     234ms  0.81% 59.45%     2680ms  9.26%  github.com/lesismal/fib/http.(*Parser).frameLength
+       6ms 0.021% 59.47%     2136ms  7.38%  github.com/lesismal/fib/http.parseRequestHead
+     432ms  1.49% 60.96%     2130ms  7.36%  github.com/lesismal/fib/http.parseSimpleRequestHead
+       4ms 0.014% 60.98%     1876ms  6.48%  github.com/lesismal/fib.(*Connection).sysRead
+      36ms  0.12% 61.10%     1870ms  6.46%  github.com/lesismal/fib/internal/sys.Read
+      64ms  0.22% 61.32%     1582ms  5.47%  github.com/lesismal/fib/http.(*Context).Respond
+      44ms  0.15% 61.48%     1518ms  5.25%  github.com/lesismal/fib/http.(*Context).writeHTTP1
+      82ms  0.28% 61.76%     1398ms  4.83%  github.com/lesismal/fib/http.(*Context).sendResponse
+     168ms  0.58% 62.34%     1316ms  4.55%  main.parseUser
+      16ms 0.055% 62.39%      946ms  3.27%  github.com/lesismal/fib/http.(*ServerHandler).armRead
+     238ms  0.82% 63.22%      904ms  3.12%  main.(*scanner).str
+       8ms 0.028% 63.24%      876ms  3.03%  github.com/lesismal/fib.(*Connection).SetReadDeadline (inline)
+      48ms  0.17% 63.41%      868ms  3.00%  github.com/lesismal/fib.(*Connection).setDeadline
+      92ms  0.32% 63.73%      800ms  2.77%  github.com/lesismal/fib.(*Connection).armDeadlineLocked
+      70ms  0.24% 63.97%      736ms  2.54%  runtime.mallocgc
+         0     0% 63.97%      728ms  2.52%  github.com/lesismal/fib.(*Engine).Run.func1
+      20ms 0.069% 64.04%      728ms  2.52%  github.com/lesismal/fib.(*Engine).runLoop
+      40ms  0.14% 64.18%      644ms  2.23%  github.com/lesismal/fib/http.(*ServerHandler).endRequestLocked
+      98ms  0.34% 64.52%      632ms  2.18%  runtime.slicebytetostring
+      22ms 0.076% 64.59%      600ms  2.07%  github.com/lesismal/fib/http.(*Context).drop
+      32ms  0.11% 64.70%      584ms  2.02%  github.com/lesismal/fib/http.(*Context).Query
+      20ms 0.069% 64.77%      556ms  1.92%  github.com/lesismal/fib/http.(*Context).ended
+     134ms  0.46% 65.24%      556ms  1.92%  internal/stringslite.IndexByte (inline)
+      46ms  0.16% 65.39%      552ms  1.91%  github.com/lesismal/fib/http.lookupQuery
+     128ms  0.44% 65.84%      534ms  1.85%  github.com/lesismal/fib/http.appendResponseHead
+      42ms  0.15% 65.98%      520ms  1.80%  github.com/lesismal/fib.(*Connection).SendParts
+       4ms 0.014% 66.00%      498ms  1.72%  runtime.systemstack
+     422ms  1.46% 67.45%      486ms  1.68%  github.com/lesismal/fib/http.simpleField
+         0     0% 67.45%      466ms  1.61%  github.com/lesismal/fib.(*epollWaiter).wait
+       8ms 0.028% 67.48%      462ms  1.60%  github.com/lesismal/fib/http.(*ServerHandler).recycle
+         0     0% 67.48%      456ms  1.58%  github.com/lesismal/fib.pollEvents
+      56ms  0.19% 67.68%      454ms  1.57%  github.com/lesismal/fib/http.(*requestBlock).recycle
+       2ms 0.0069% 67.68%      452ms  1.56%  github.com/lesismal/fib.(*Connection).queueCorkedLocked (inline)
+      50ms  0.17% 67.86%      450ms  1.56%  github.com/lesismal/fib.(*Connection).queueLocked
+     192ms  0.66% 68.52%      434ms  1.50%  sync.(*Pool).Get
+     432ms  1.49% 70.01%      432ms  1.49%  main.appendString (inline)
+     230ms  0.79% 70.81%      410ms  1.42%  runtime.mallocgcTinySC2

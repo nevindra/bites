@@ -1,0 +1,109 @@
+-- get fib 1: unmatched / other syscalls
+     0.03s unmatched: time.now
+-- get fib 2: unmatched / other syscalls
+     0.03s unmatched: time.now
+-- get fib 3: unmatched / other syscalls
+     0.01s unmatched: time.now
+     0.00s unmatched: gogo
+-- get nilogo 1: unmatched / other syscalls
+     0.05s unmatched: time.now
+     0.00s unmatched: gogo
+     0.00s unmatched: runtime.(*gQueue).pushBack < runtime.globrunqput < runtime.goschedImpl < runtime.gopreempt_m < runtime.newstack
+-- get nilogo 2: unmatched / other syscalls
+     0.03s unmatched: time.now
+     0.00s unmatched: gogo
+-- get nilogo 3: unmatched / other syscalls
+     0.06s unmatched: time.now
+     0.00s unmatched: gogo
+-- post fib 1: unmatched / other syscalls
+     0.02s unmatched: time.now
+     0.00s unmatched: runtime.morestack
+-- post fib 2: unmatched / other syscalls
+     0.03s unmatched: time.now
+-- post fib 3: unmatched / other syscalls
+     0.03s unmatched: time.now
+-- post nilogo 1: unmatched / other syscalls
+     0.05s unmatched: time.now
+-- post nilogo 2: unmatched / other syscalls
+     0.05s unmatched: time.now
+     0.00s unmatched: gogo
+-- post nilogo 3: unmatched / other syscalls
+     0.06s unmatched: time.now
+
+== GET: mean [min-max] over 3 rounds, ns per request unless noted
+metric                                                          nilo-go                        fib nilo-go minus fib
+total                                            3571.9 [3559.9-3580.9]     2441.4 [2434.5-2446.8]       1130.6
+sys write                                        1570.3 [1549.2-1585.8]     1311.5 [1299.1-1325.6]        258.8
+sys read                                            474.8 [461.0-499.3]        170.3 [167.0-175.2]        304.5
+sys epoll                                              56.9 [52.7-59.0]           54.0 [52.9-54.9]          2.9
+futex (thread sleep/wake)                           2.435 [1.604-2.967]        2.064 [1.102-2.579]          0.4
+GC                                                     77.2 [71.9-80.2]           22.6 [21.5-23.6]         54.6
+deadlines (SetReadDeadline, timers)                 387.5 [381.5-396.7]         101.5 [99.6-103.9]        286.0
+engine clock: Server.now() x4 and dateLine          141.8 [139.0-143.5]        0.000 [0.000-0.000]        141.8
+clock (time.Now, nanotime)                             21.9 [20.7-22.6]           38.4 [35.2-41.7]        -16.5
+allocation (mallocgc)                                  60.9 [58.6-63.0]           27.2 [25.7-28.0]         33.7
+scheduler and netpoll                               115.0 [103.6-127.8]           18.9 [17.1-20.2]         96.1
+router                                                 47.5 [46.5-48.4]        0.000 [0.000-0.000]         47.5
+h1 parse                                               93.8 [89.2-98.8]        170.0 [167.0-175.9]        -76.2
+decode + JSON codec                                 126.5 [122.5-132.2]        0.000 [0.000-0.000]        126.5
+response write (head, outPlan)                         38.7 [36.0-42.2]        115.5 [112.8-116.8]        -76.8
+handler (user code / hand-written route)            0.305 [0.000-0.688]           18.8 [17.3-20.9]        -18.5
+engine loop (internal/engine)                       172.8 [168.9-177.1]        0.000 [0.000-0.000]        172.8
+request ctx + typed-route glue (reqctx, root)           65.0 [58.1-73.0]        0.000 [0.000-0.000]         65.0
+fib glue (Connection, Engine, taskpool)             0.000 [0.000-0.000]        388.3 [378.1-401.2]       -388.3
+net + poll wrappers (non-syscall part)              113.0 [110.3-115.2]        0.000 [0.000-0.000]        113.0
+unmatched                                           5.632 [4.125-6.846]        2.415 [1.545-3.123]          3.2
+client cpu ns/req                                3573.0 [3558.1-3583.6]     2449.8 [2440.2-2462.8]       1123.2
+nonvoluntary ctx/req                                0.001 [0.001-0.001]        0.001 [0.001-0.001]          0.0
+proc cpu ns/req (user+sys ticks)                 3575.8 [3561.7-3586.1]     2447.9 [2440.7-2455.1]       1128.0
+reads/req (syscr)                                   2.996 [2.995-2.997]        0.000 [0.000-0.000]          3.0
+rps                                           875602.9 [872716.5-877659.8] 1070101.0 [1035819.3-1088618.2]    -194498.1
+sys ns/req (ticks)                               1963.6 [1957.1-1971.6]     1495.1 [1486.7-1504.8]        468.5
+threads                                                11.3 [11.0-12.0]           11.3 [11.0-12.0]          0.0
+user ns/req (ticks)                              1612.2 [1599.7-1622.5]        952.8 [943.0-968.3]        659.4
+voluntary ctx/req                                   0.003 [0.003-0.003]        0.008 [0.008-0.008]         -0.0
+writes/req (syscw)                                  0.999 [0.999-1.000]        0.000 [0.000-0.000]          1.0
+
+== POST: mean [min-max] over 3 rounds, ns per request unless noted
+metric                                                          nilo-go                        fib nilo-go minus fib
+total                                            4542.9 [4539.6-4546.9]     3112.3 [3104.9-3120.7]       1430.6
+sys write                                        1606.0 [1592.6-1630.7]     1450.8 [1437.0-1463.4]        155.2
+sys read                                            501.0 [499.8-502.1]        193.3 [186.4-200.9]        307.7
+sys epoll                                              59.4 [58.2-60.4]           53.0 [51.4-55.0]          6.4
+futex (thread sleep/wake)                           3.141 [1.941-4.708]        1.579 [1.291-1.933]          1.6
+GC                                                  130.0 [120.2-138.1]           46.3 [45.8-46.6]         83.7
+deadlines (SetReadDeadline, timers)                 462.1 [455.8-465.8]         102.8 [94.2-110.1]        359.3
+engine clock: Server.now() x4 and dateLine          185.3 [184.6-186.4]        0.000 [0.000-0.000]        185.3
+clock (time.Now, nanotime)                             27.6 [25.8-29.9]           37.0 [34.2-38.7]         -9.3
+allocation (mallocgc)                                  78.0 [74.8-82.1]           87.2 [82.3-92.1]         -9.2
+scheduler and netpoll                               140.7 [137.5-146.7]           23.0 [16.8-28.4]        117.8
+router                                                 53.2 [50.5-56.8]        0.000 [0.000-0.000]         53.2
+h1 parse                                            179.6 [172.2-183.6]        268.2 [266.3-269.4]        -88.6
+decode + JSON codec                                 620.6 [605.7-628.4]        0.000 [0.000-0.000]        620.6
+response write (head, outPlan)                         38.0 [33.5-40.2]        113.0 [108.2-117.3]        -75.1
+handler (user code / hand-written route)            1.108 [0.277-2.492]        168.6 [164.5-175.1]       -167.5
+engine loop (internal/engine)                       194.5 [189.9-197.5]        0.000 [0.000-0.000]        194.5
+request ctx + typed-route glue (reqctx, root)        119.4 [107.6-131.5]        0.000 [0.000-0.000]        119.4
+fib glue (Connection, Engine, taskpool)             0.000 [0.000-0.000]        564.8 [562.9-567.1]       -564.8
+net + poll wrappers (non-syscall part)              135.5 [130.4-143.6]        0.000 [0.000-0.000]        135.5
+unmatched                                           7.576 [6.379-8.595]        2.656 [2.148-3.023]          4.9
+client cpu ns/req                                4544.4 [4542.4-4547.7]     3119.0 [3111.3-3126.8]       1425.4
+nonvoluntary ctx/req                                0.001 [0.001-0.001]        0.001 [0.001-0.001]          0.0
+proc cpu ns/req (user+sys ticks)                 4548.0 [4544.5-4554.1]     3120.2 [3111.8-3127.8]       1427.8
+reads/req (syscr)                                   2.996 [2.995-2.998]        0.000 [0.000-0.000]          3.0
+rps                                           721558.5 [721101.1-722184.3]  928996.0 [926201.1-930974.2]    -207437.4
+sys ns/req (ticks)                               2055.3 [2045.5-2072.4]     1659.5 [1649.9-1667.0]        395.8
+threads                                                12.0 [12.0-12.0]           11.3 [11.0-12.0]          0.7
+user ns/req (ticks)                              2492.8 [2473.0-2508.7]     1460.7 [1454.1-1466.2]       1032.0
+voluntary ctx/req                                   0.004 [0.003-0.004]        0.006 [0.006-0.007]         -0.0
+writes/req (syscw)                                  0.999 [0.999-1.000]        0.000 [0.000-0.000]          1.0
+
+== syscalls per request, by number, from the ptrace counter (syscalls.sh); only those over 0.02
+get-fib-c1         reqs  180614  {'futex': 1.44, 'epoll_pwait': 1.27, 'recvfrom': 1.0, 'sendto': 1.0, 'epoll_ctl': 0.43, 'nanosleep': 0.26}
+get-fib-c256       reqs  156710  {'recvfrom': 1.0, 'sendto': 1.0}
+get-nilogo-c1      reqs  233053  {'read': 2.01, 'epoll_pwait': 1.75, 'write': 1.0, 'nanosleep': 0.04}
+get-nilogo-c256    reqs   80394  {'read': 2.02, 'write': 1.0, 'nanosleep': 0.05, 'futex': 0.03}
+post-fib-c1        reqs  175098  {'futex': 1.51, 'epoll_pwait': 1.3, 'recvfrom': 1.0, 'sendto': 1.0, 'epoll_ctl': 0.46, 'nanosleep': 0.26}
+post-fib-c256      reqs  152327  {'recvfrom': 1.0, 'sendto': 1.0}
+post-nilogo-c1     reqs  223919  {'read': 2.0, 'epoll_pwait': 1.87, 'write': 1.0, 'nanosleep': 0.04}
+post-nilogo-c256   reqs   70505  {'read': 2.02, 'write': 1.01, 'nanosleep': 0.07, 'futex': 0.04}

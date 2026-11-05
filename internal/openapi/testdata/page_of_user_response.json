@@ -1,0 +1,32 @@
+{
+  "components": {
+    "Page_User": {
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/components/schemas/User"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "User": {
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    }
+  },
+  "schema": {
+    "$ref": "#/components/schemas/Page_User"
+  }
+}

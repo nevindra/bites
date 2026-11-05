@@ -1,0 +1,21 @@
+get
+  before-none  krps [1023.2, 1023.1, 990.9] mean 1012.4  cpu ns/req [2790, 2783, 2827]  p50 us [230, 230, 232]  p99 us [816, 815, 900]  mean p99 844  errors 0
+  before-mw1   krps [952.8, 953.6, 939.3] mean 948.5  cpu ns/req [3087, 3075, 3101]  p50 us [244, 244, 246]  p99 us [919, 917, 948]  mean p99 928  errors 0
+  after-none   krps [1029.0, 1010.5, 1017.4] mean 1019.0  cpu ns/req [2768, 2792, 2797]  p50 us [228, 230, 230]  p99 us [811, 851, 831]  mean p99 831  errors 0
+  after-mw1    krps [974.7, 975.9, 973.5] mean 974.7  cpu ns/req [2978, 2981, 2984]  p50 us [241, 241, 242]  p99 us [862, 850, 852]  mean p99 855  errors 0
+  after-bare1  krps [988.9, 983.3, 989.4] mean 987.2  cpu ns/req [2924, 2942, 2926]  p50 us [237, 238, 237]  p99 us [852, 864, 853]  mean p99 856  errors 0
+  after-mw3    krps [937.3, 933.3, 924.3] mean 931.6  cpu ns/req [3148, 3155, 3188]  p50 us [249, 249, 251]  p99 us [956, 973, 993]  mean p99 974  errors 0
+post
+  before-none  krps [900.4, 901.3, 856.7] mean 886.2  cpu ns/req [3329, 3331, 3396]  p50 us [259, 258, 262]  p99 us [939, 951, 1052]  mean p99 981  errors 0
+  before-mw1   krps [842.6, 846.1, 843.4] mean 844.0  cpu ns/req [3641, 3626, 3637]  p50 us [274, 272, 272]  p99 us [1022, 1021, 1020]  mean p99 1021  errors 0
+  after-none   krps [905.9, 892.9, 903.2] mean 900.7  cpu ns/req [3310, 3329, 3320]  p50 us [257, 258, 257]  p99 us [946, 980, 956]  mean p99 961  errors 0
+  after-mw1    krps [861.8, 853.0, 863.5] mean 859.4  cpu ns/req [3546, 3563, 3532]  p50 us [270, 271, 269]  p99 us [990, 1005, 983]  mean p99 993  errors 0
+  after-bare1  krps [877.7, 874.3, 871.2] mean 874.4  cpu ns/req [3460, 3478, 3471]  p50 us [265, 266, 266]  p99 us [968, 980, 985]  mean p99 978  errors 0
+  after-mw3    krps [826.0, 825.0, 821.9] mean 824.3  cpu ns/req [3747, 3758, 3769]  p50 us [279, 279, 279]  p99 us [1105, 1115, 1134]  mean p99 1118  errors 0
+allocs
+  before-none  allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  before-mw1   allocs/req [2.004, 2.003, 2.004]  bytes/req [385, 385, 385]
+  after-none   allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 304, 304]
+  after-mw1    allocs/req [2.003, 2.003, 2.003]  bytes/req [304, 305, 305]
+  after-bare1  allocs/req [2.003, 2.003, 2.003]  bytes/req [305, 304, 304]
+  after-mw3    allocs/req [2.004, 2.004, 2.004]  bytes/req [305, 305, 305]
