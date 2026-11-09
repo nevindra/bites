@@ -1247,6 +1247,48 @@ func budgetUpEachHandler(_ context.Context, in budgetUpIn) (Text, error) {
 	return Text{Body: "ok"}, nil
 }
 
+type budgetRawIn struct {
+	Path struct{ ID int64 }
+	Body BodyReader
+}
+
+// budgetRawBuf is the handler's read buffer, kept outside the handler: Read passes it to the
+// connection, so a buffer declared in the handler is a heap allocation of the handler's own,
+// which a handler pays whatever reads its body (io.Copy makes one of 32 KiB).
+var budgetRawBuf [512]byte
+
+func budgetRawHandler(_ context.Context, in budgetRawIn) (Text, error) {
+	for {
+		if _, err := in.Body.Read(budgetRawBuf[:]); err != nil {
+			return Text{Body: "ok"}, nil
+		}
+	}
+}
+
+func TestABodyReaderRequestAllocatesOnlyItsHandle(t *testing.T) {
+	if raceEnabled {
+		t.Skip("the race detector changes allocation counts")
+	}
+	c := memRig(t, func(a *App) { a.Put("/raw/{id}", budgetRawHandler, MaxBody(1<<20)) })
+	body := strings.Repeat("some body bytes ", 100)
+	plain := []byte("PUT /raw/42 HTTP/1.1\r\nHost: x\r\nContent-Length: " + strconv.Itoa(len(body)) + "\r\n\r\n" + body)
+	chunkedReq := []byte("PUT /raw/42 HTTP/1.1\r\nHost: x\r\nTransfer-Encoding: chunked\r\n\r\n" + strconv.FormatInt(int64(len(body)), 16) + "\r\n" + body + "\r\n0\r\n\r\n")
+	for _, tc := range []struct {
+		name string
+		req  []byte
+		want float64
+	}{
+		{"a length body", plain, 3},
+		{"a chunked body", chunkedReq, 3},
+	} {
+		got := keepAlive(t, c, tc.req, "HTTP/1.1 200 OK")
+		t.Logf("%s: %v allocations per request", tc.name, got)
+		if got != tc.want {
+			t.Errorf("%s: allocs/request = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestReadingAnUploadWithEachAllocatesWhatTheLoopOverNextDoes(t *testing.T) {
 	if raceEnabled {
 		t.Skip("the race detector changes allocation counts")

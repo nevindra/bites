@@ -566,6 +566,11 @@ func (r *mpRun) parts() bool {
 		if spec.maxSize > 0 {
 			bound = spec.maxSize
 		}
+		// The header's slices are views of the parser's window, which reading the file's bytes
+		// overwrites (PartInfo): the name and type are copied before ReceiveFile, never after.
+		var arr [256]byte
+		nb := append(append(arr[:0], h.FileName...), h.ContentType...)
+		str := r.slab.Copy(nb)
 		u, err := r.m.ReceiveFile(h.Gen, bound)
 		if err != nil {
 			if err == engine.ErrPartTooLarge {
@@ -573,9 +578,6 @@ func (r *mpRun) parts() bool {
 			}
 			return r.fail(err)
 		}
-		var arr [256]byte
-		nb := append(append(arr[:0], h.FileName...), h.ContentType...)
-		str := r.slab.Copy(nb)
 		r.storeFile(idx, FormFile{Name: f.wire, FileName: str[:len(h.FileName)], ContentType: str[len(h.FileName):], Size: u.Size(), f: u})
 	}
 }

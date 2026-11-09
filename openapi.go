@@ -203,6 +203,86 @@ func ErrorStatuses(statuses ...int) RouteOption {
 	}
 }
 
+// ErrorStatus states an error status a handler may return together with the type of the members
+// its answer carries, so the API document, and the client types generated from it, say what the
+// problem body holds beyond the framework's own members (ADR 0088):
+//
+//	bites.ErrorStatus[StaleBlocks](409)
+//
+// The document's response for that status is application/problem+json with the problem's members
+// and the fields of T. The handler sends the data with WithMembers(bites.Conflict("..."), StaleBlocks{...}),
+// which writes T with the response codec. T is a struct whose wire names do not clash with the
+// problem's own (type, title, status, detail, instance, errors, truncated, request_id). It
+// replaces ErrorStatuses for its status: do not name the status in both on one route. It is
+// refused for 400, 401 and 429, which the framework answers in a shape of its own, for a status the
+// framework already answers on the route (for example 413 on a route with a body), for a T that
+// is not a struct or cannot be written as JSON, for a status named twice on a route and its groups,
+// and on an Undocumented or static route. It states and does not check: an error returned with
+// other members is still sent, and logged as one the document does not describe.
+func ErrorStatus[T any](status int) RouteOption {
+	t := reflect.TypeFor[T]()
+	return func(c *routeConfig) {
+		switch {
+		case status < 400 || status > 599:
+			c.refuse("ErrorStatus[%s] is given %d, which is not an error status: give a status from 400 to 599 the handler returns", typeLabel(t), status)
+		case status == 400 || status == 401 || status == 429:
+			c.refuse("ErrorStatus[%s] is given %d, which the framework answers in a shape of its own (400 lists the Input's mistakes, 401 and 429 carry headers): use a status the handler decides, such as 409 or 422", typeLabel(t), status)
+		case t.Kind() != reflect.Struct:
+			c.refuse("ErrorStatus[%s](%d): the members of an error are the fields of a struct, so T must be a struct type, as ErrorStatus[StaleBlocks](%d)", typeLabel(t), status, status)
+		case slices.ContainsFunc(c.typedErrors, func(o typedError) bool { return o.status == status }):
+			c.refuse("ErrorStatus is given %d twice: state the members of a status once, on the route or on its group", status)
+		default:
+			c.typedErrors = append(c.typedErrors, typedError{status: status, typ: t})
+		}
+	}
+}
+
+// typedError is one ErrorStatus: an error status and the type of the members of its answer.
+type typedError struct {
+	status int
+	typ    reflect.Type
+}
+
+// statedError is a typedError as the app keeps it, to tell at run time whether a route states the
+// members an error sends.
+type statedError struct {
+	status int
+	typ    reflect.Type
+}
+
+// problemMembers are the names the problem body writes itself, so a type given to ErrorStatus
+// cannot use them for a field of its own.
+var problemMembers = []string{"type", "title", "status", "detail", "instance", "errors", "truncated", "request_id"}
+
+// typedErrorResponse is the response the document states for an ErrorStatus: the problem body
+// and the fields of T. A field of T that is a member of the problem is refused here, at
+// Registration, with the wire name that clashes.
+func (a *App) typedErrorResponse(reg *openapi.Registry, te typedError) (map[string]any, error) {
+	mp, err := a.memberPlanOf(te.typ)
+	if err != nil {
+		return nil, refusalf("ErrorStatus[%s](%d): the type cannot be written as JSON: %v", typeLabel(te.typ), te.status, err)
+	}
+	for _, n := range problemMembers {
+		if _, ok := mp.names[n]; ok {
+			return nil, refusalf("ErrorStatus[%s](%d): a field of %s is written as %q, a member the problem body already has (%s): give the field another wire name with a json tag", typeLabel(te.typ), te.status, typeLabel(te.typ), n, strings.Join(problemMembers, ", "))
+		}
+	}
+	schema, err := reg.Schema(te.typ, openapi.Response)
+	if err != nil {
+		return nil, err
+	}
+	if a.statedErrors == nil {
+		a.statedErrors = map[statedError]bool{}
+	}
+	a.statedErrors[statedError{te.status, te.typ}] = true
+	return map[string]any{
+		"description": "An error answer (problem+json) that also carries the members of " + typeLabel(te.typ) + ".",
+		"content": map[string]any{problemType: map[string]any{"schema": map[string]any{
+			"allOf": []any{problemSchema(), schema},
+		}}},
+	}, nil
+}
+
 // MediaType states the media type of what a Bytes, File or Stream answer of this route sends, so
 // the API document says "application/x-ndjson" where it would say any type ("*/*"): the
 // handler sets the type at run time, where Registration cannot see it. It is for a route, not a
@@ -964,7 +1044,9 @@ func (a *App) describeRoute(method, full, where string, inT reflect.Type, in *in
 	}
 	if in.body != nil && in.body.kind != bodyBytes {
 		responses["413"] = map[string]any{"$ref": "#/components/responses/Error"}
-		responses["415"] = map[string]any{"$ref": "#/components/responses/Error"}
+		if in.body.kind != bodyReader {
+			responses["415"] = map[string]any{"$ref": "#/components/responses/Error"}
+		}
 	}
 	// The credentials the route's Providers read (ADR 0069).
 	if sec := a.security(provs); sec != nil {
@@ -976,6 +1058,19 @@ func (a *App) describeRoute(method, full, where string, inT reflect.Type, in *in
 	}
 	if err := a.statedAnswers(reg, responses, cfg); err != nil {
 		return nil, err
+	}
+	// The error statuses with members (ErrorStatus[T]) come first, so a status the framework
+	// already answers on the route is refused rather than quietly replaced.
+	for _, te := range cfg.typedErrors {
+		key := strconv.Itoa(te.status)
+		if _, ok := responses[key]; ok {
+			return nil, refusalf("ErrorStatus[%s](%d): the framework already answers %d on this route with a shape of its own, so the document cannot state members for it: use a status the handler decides, such as 409 or 422", typeLabel(te.typ), te.status, te.status)
+		}
+		r, err := a.typedErrorResponse(reg, te)
+		if err != nil {
+			return nil, err
+		}
+		responses[key] = r
 	}
 	// The error statuses the route says its handler returns (ErrorStatuses). A 429 is the
 	// rate limit's answer, with its headers, since RateLimiter.Allow in a Provider sends it.
@@ -1156,6 +1251,8 @@ func (a *App) requestBody(reg *openapi.Registry, b *bodyPlan, t, input reflect.T
 	switch b.kind {
 	case bodyBytes:
 		content = map[string]any{"*/*": map[string]any{}}
+	case bodyReader:
+		content = map[string]any{"*/*": map[string]any{"schema": map[string]any{"type": "string", "format": "binary"}}}
 	case bodyUpload:
 		content = map[string]any{"multipart/form-data": map[string]any{"schema": map[string]any{"type": "object"}}}
 	case bodyMultipart:
@@ -1555,24 +1652,33 @@ func (a *App) marshalDocument() ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
+// problemProps are the members every problem body can have, with extra added.
+func problemProps(extra map[string]any) map[string]any {
+	str := map[string]any{"type": "string"}
+	p := map[string]any{
+		"title":      str,
+		"status":     map[string]any{"type": "integer"},
+		"detail":     str,
+		"request_id": str,
+	}
+	for k, v := range extra {
+		p[k] = v
+	}
+	return p
+}
+
+// problemSchema is the schema of the answer of ADR 0012, without a list of errors.
+func problemSchema() map[string]any {
+	return map[string]any{"type": "object", "required": []any{"title", "status"}, "properties": problemProps(nil)}
+}
+
 // errorResponses are the problem+json answers of ADR 0012, shared by every operation. They are
 // components of their own kind, so a type of the application named Error or InvalidInput cannot
 // collide with them.
 func errorResponses() map[string]any {
 	str := map[string]any{"type": "string"}
-	props := func(extra map[string]any) map[string]any {
-		p := map[string]any{
-			"title":      str,
-			"status":     map[string]any{"type": "integer"},
-			"detail":     str,
-			"request_id": str,
-		}
-		for k, v := range extra {
-			p[k] = v
-		}
-		return p
-	}
-	problem := map[string]any{"type": "object", "required": []any{"title", "status"}, "properties": props(nil)}
+	props := problemProps
+	problem := problemSchema()
 	invalid := map[string]any{"type": "object", "required": []any{"title", "status", "errors"}, "properties": props(map[string]any{
 		"errors": map[string]any{"type": "array", "items": map[string]any{
 			"type": "object", "required": []any{"location", "message"},

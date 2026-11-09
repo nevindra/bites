@@ -62,18 +62,20 @@ type UploadOptions struct {
 // Multipart is one upload in progress. Its methods are safe for concurrent use, though a handler
 // has no reason to call them from two goroutines.
 type Multipart struct {
-	mu      sync.Mutex
-	closed  atomic.Bool
-	c       *conn
-	ex      *Exchange
-	win     *[UploadWindow]byte
-	p       mpart.Parser
-	src     uploadSource
-	gen     uint32
-	counter *atomic.Int64
-	started bool
-	timeout time.Duration
-	until   time.Time // the body's deadline
+	mu       sync.Mutex
+	closed   atomic.Bool
+	c        *conn
+	ex       *Exchange
+	win      *[UploadWindow]byte
+	p        mpart.Parser
+	src      uploadSource
+	gen      uint32
+	counter  *atomic.Int64
+	started  bool
+	released bool
+	raw      bool // a BodyReader (ADR 0044): the body's bytes go to the handler as they are, with no parser
+	timeout  time.Duration
+	until    time.Time // the body's deadline
 
 	// Files received by ReceiveFile (ADR 0044), closed when the request ends.
 	opt     UploadOptions
@@ -125,6 +127,62 @@ func (ex *Exchange) OpenMultipart(o UploadOptions) (*Multipart, error) {
 	}
 	c.sc.mp = m
 	return m, nil
+}
+
+// OpenBody prepares the request's body to be read as it is, by a BodyReader (ADR 0044). It is
+// OpenMultipart without a boundary, a window or a parser: the same refusals before the client is
+// invited to send the body, the same counter, the same single place that waits (Fill), and the
+// bytes go straight into the buffer the handler passes to Read.
+func (ex *Exchange) OpenBody(o UploadOptions) (*Multipart, error) {
+	c := ex.c
+	req := &c.sc.req
+	if !req.Chunked && req.ContentLength > o.Max {
+		ex.closeAfter = true
+		return nil, BodyTooLarge(o.Max)
+	}
+	if o.InFlight != nil {
+		if o.InFlight.Add(1) > o.Limit {
+			o.InFlight.Add(-1)
+			ex.closeAfter = true
+			return nil, ErrUploadBusy
+		}
+	}
+	m := &Multipart{c: c, ex: ex, counter: o.InFlight, timeout: o.Timeout, opt: o, raw: true}
+	m.src = uploadSource{m: m, chunked: req.Chunked, remain: req.ContentLength, remainStart: req.ContentLength, max: o.Max}
+	c.sc.mp = m
+	return m, nil
+}
+
+// ReadRaw reads the next bytes of a BodyReader's body into b. It returns io.EOF at the end of the
+// body, ErrUploadClosed once the request is over, and otherwise the *h1.Error the framework
+// answers with (413, 408 or 400); after any error but io.EOF the connection is closed after the
+// answer.
+func (m *Multipart) ReadRaw(b []byte) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closed.Load() {
+		return 0, ErrUploadClosed
+	}
+	if len(b) == 0 {
+		return 0, nil
+	}
+	n, err := m.src.Fill(b)
+	if err != nil && err != io.EOF {
+		m.ex.closeAfter = true
+	}
+	return n, err
+}
+
+// whole reports whether the source has delivered the whole body, so that the connection can carry
+// on to the next request.
+func (u *uploadSource) whole() bool {
+	if u.err != nil {
+		return false
+	}
+	if u.chunked {
+		return u.done
+	}
+	return u.remain == 0
 }
 
 // start sends 100 Continue when the client asked for it and arms the body's deadline. It runs
@@ -316,13 +374,16 @@ func (m *Multipart) lockKick() {
 func (m *Multipart) shut() {
 	m.lockKick()
 	defer m.mu.Unlock()
-	if m.win == nil {
+	if m.released {
 		return
 	}
-	m.p.Release()
-	windowPool.Put(m.win)
-	m.win = nil
-	m.closeFiles()
+	if !m.raw {
+		m.p.Release()
+		windowPool.Put(m.win)
+		m.win = nil
+		m.closeFiles()
+	}
+	m.released = true
 	if m.counter != nil {
 		m.counter.Add(-1)
 	}
@@ -341,7 +402,9 @@ func (ex *Exchange) finishUpload() {
 	complete := false
 	if m.started {
 		m.lockKick()
-		if m.win != nil && m.p.Ended() && !ex.closeAfter {
+		if m.raw {
+			complete = m.src.whole() && !ex.closeAfter
+		} else if m.win != nil && m.p.Ended() && !ex.closeAfter {
 			m.c.setReadDeadline(m.until)
 			complete = m.p.Drain() == nil
 		}

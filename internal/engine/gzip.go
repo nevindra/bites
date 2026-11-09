@@ -167,4 +167,3 @@ func lowerPrefix(ct string) string {
 	}
 	return ct[:n]
 }
-

@@ -42,6 +42,19 @@ type CSV[T any] = wire.CSV[T]
 //	GoString() string a form that reads back as the Go that made it
 type Null[T any] = wire.Null[T]
 
+// RawJSON is a JSON value read and written as bytes and described in the API document as T
+// (ADR 0084), for a member whose JSON the application owns: a patch of style fields, a batch of
+// operations. Its one field, JSON, holds the bytes exactly as sent, or to send; null is accepted
+// and written like any value, and a nil JSON is written as null. T is not checked against the
+// bytes, it only decides the schema, which allows null. T may be a struct, list, map or scalar,
+// never an interface, a pointer or free-form JSON itself (use json.RawMessage for any JSON).
+//
+// Its methods (go doc does not list a method through an alias, so they are here):
+//
+//	MarshalJSON() ([]byte, error)   writes JSON as it is, or null when it is empty
+//	UnmarshalJSON(b []byte) error   (pointer receiver) keeps a copy of b, null included
+type RawJSON[T any] = wire.RawJSON[T]
+
 // Some returns an Opt that is present and holds v.
 func Some[T any](v T) Opt[T] { return wire.Some(v) }
 

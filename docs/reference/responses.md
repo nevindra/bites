@@ -191,6 +191,10 @@ app.Get("/missing", func(ctx context.Context, in struct{}) (bites.Page, error) {
 type File struct {
 	Root        *os.Root
 	FS          fs.FS
+	Open        func(ctx context.Context) (io.ReadSeekCloser, error)
+	Size        int64
+	ModTime     time.Time
+	Content     []byte
 	Name        string
 	ContentType string
 	Attachment  string
@@ -201,7 +205,10 @@ type File struct {
 
 File is a 200 whose body is a file, sent with its `Content-Length` and `Last-Modified` and read in chunks as it is written: a file is never held whole in memory.
 
-- `Root` and `FS`: exactly one says where the file is. Both set, or neither, is a 500 and logged.
+- `Root`, `FS`, `Open` and `Content`: exactly one says where the file is. None, or more than one, is a 500 and logged (a `File` is a return value, so it cannot be refused at Registration), and the message says to give exactly one.
+- `Open` opens a body that is not in a file system (an object in S3, GCS or a database) when a body is to be sent, with the request's context, which is cancelled when the client leaves. It returns a reader at the start that is `Seek`ed for a range and closed by the answer. `Size` is the length of what it returns (0 is an empty body, and a negative one is a 500); a reader whose length differs is a 500 logged with both numbers. An error that `Is(fs.ErrNotExist)` is a 404, any other a 500, logged. A HEAD, 304, 412 and 416 do not call it.
+- `Content` is the whole body in memory, with no opener and no `Size`; it must not be modified until the answer is sent. An empty body is `[]byte{}`, because a nil `Content` is not set.
+- `ModTime` is the time of `Open` or `Content`: it gives `Last-Modified` and the made `ETag`, and zero gives neither (put an `ETag` in `Header`). With `Open` and `Content`, `Name` is not looked up: it only gives the type by its extension and a name for `Attachment`, and may be empty.
 - `Name` is the path inside it, slash separated. A `Root` is an `os.Root`, which cannot leave its directory: a `Name` with `..`, a symbolic link that points out and an absolute `Name` are refused by the operating system call. An `FS` is checked with `fs.ValidPath` first. A `Name` that is not valid, a file that does not exist, or one that is not a regular file is the same 404 problem+json for each, so an answer does not say which files exist.
 - `ContentType` is used when given; otherwise the type of the extension of `Name`, and `application/octet-stream` when that has none. A `Content-Type` in `Header` replaces both.
 - `Attachment`, when it is not empty, makes the answer a download saved under that name: `Content-Disposition: attachment` with the name written by the standard library's `mime.FormatMediaType`, quoted, and as `filename*` (RFC 2231) when it is outside ASCII or holds a line break or invalid UTF-8, so no name can split the response. Only the part after the last `/` or `\` is used, so `Name` itself can be given (`reports/q3.pdf` is saved as `q3.pdf`); a name with nothing left (`dir/`, `.`, `..`) sends `attachment` alone. It is sent on a 200 and a 206, not on a 304. A `Content-Disposition` in `Header` replaces it. Empty sends none, and the browser shows the file when it can.
@@ -602,6 +609,10 @@ type Stream struct {
 	// not Live (a download) is drained.
 	Live bool
 	Func func(ctx context.Context, w *StreamWriter) error
+	// Done is called exactly once when the response is over, whichever way it ends, and in place of
+	// Func when Func never runs (a HEAD, a replaced answer, a nil Func, an error returned with the
+	// Stream). Nil does nothing.
+	Done func()
 }
 ```
 
@@ -610,6 +621,7 @@ Stream is a response whose body is written over time: a large download, NDJSON, 
 - `Func` runs after the handler and after every middleware has returned, on the connection's goroutine, with the request's context, which is cancelled if the client leaves ([ADR 0016](../adr/0016-the-handler-context-is-cancelled-on-disconnect.md)).
 - It ends the response by returning: nil ends it cleanly (the terminating chunk). An error returned after the first byte, or a panic, closes the connection with no terminating chunk, so a client cannot mistake a cut stream for a complete one. An error or a panic before the first byte is the ordinary answer to an error or a panic.
 - The body is chunked on HTTP/1.1; an HTTP/1.0 client gets the body until the connection closes. A HEAD request gets the head and no body, and `Func` does not run.
+- `Done`, when it is not nil, is called exactly once when the response is over, so a limit the handler took before it returned (a per-user turn, a semaphore slot) is given back whichever way the response ends. See [Giving back what the handler took](../guide/streaming.md#giving-back-what-the-handler-took).
 - `Status` is 200 when zero and must be a status that has a body: 1xx, 204 and 304 are a 500. A nil `Func` is a 500, logged. A `Content-Type` in `Header` is used; without one the stream is `application/octet-stream`.
 - `Attachment`, when it is not empty, makes the answer a download saved under that name, as on a [`File`](#file).
 - Middleware sees a Stream as a `Response` with `Streaming()` true and `Size()` 0, and a `Timeout` bounds only the time to produce it ([middleware](./middleware.md#timeout)).
@@ -667,10 +679,11 @@ type SSE struct {
 	Header  Header
 	Cookies []Cookie
 	Func    func(ctx context.Context, e EventWriter) error
+	Done    func()
 }
 ```
 
-SSE is a Server-Sent Events response: a Stream, live by construction, with the content type `text/event-stream` and `Cache-Control: no-cache` unless `Header` says otherwise, whose function writes events and not bytes. Its status is 200. `Shutdown` cancels its context with `ErrServerClosed`, and the stream then ends cleanly with its terminating chunk. A function that has sent nothing yet still ends as a 200 with an empty event stream. In the API document its content is `text/event-stream`.
+SSE is a Server-Sent Events response (its `Done` is the `Stream`'s): a Stream, live by construction, with the content type `text/event-stream` and `Cache-Control: no-cache` unless `Header` says otherwise, whose function writes events and not bytes. Its status is 200. `Shutdown` cancels its context with `ErrServerClosed`, and the stream then ends cleanly with its terminating chunk. A function that has sent nothing yet still ends as a 200 with an empty event stream. In the API document its content is `text/event-stream`.
 
 Guide: [streaming and SSE](../guide/streaming.md).
 
@@ -724,10 +737,11 @@ type Events[T any] struct {
 	Header  Header
 	Cookies []Cookie
 	Func    func(ctx context.Context, e EventSender[T]) error
+	Done    func()
 }
 ```
 
-Events is a Server-Sent Events response whose events carry a `T`, written as JSON: an `SSE` whose function sends values and not strings. `T` is known at Registration, so its encoder is compiled there with the framework's codec and the field names of [`WithNaming`](./app.md#withnaming), a `T` that cannot be written as JSON is refused there, and the API document states `T`'s schema as the data of every event. Like an `SSE` it is live, it is `text/event-stream` with `Cache-Control: no-cache` unless `Header` says otherwise, its status is 200, and `Shutdown` ends it cleanly with its terminating chunk. A `Func` that is nil is a 500, logged. It may be one of the types an interface return declares with [`Returns`](#returns).
+Events is a Server-Sent Events response whose events carry a `T`, written as JSON: an `SSE` whose function sends values and not strings. Its `Done` is the `Stream`'s. `T` is known at Registration, so its encoder is compiled there with the framework's codec and the field names of [`WithNaming`](./app.md#withnaming), a `T` that cannot be written as JSON is refused there, and the API document states `T`'s schema as the data of every event. Like an `SSE` it is live, it is `text/event-stream` with `Cache-Control: no-cache` unless `Header` says otherwise, its status is 200, and `Shutdown` ends it cleanly with its terminating chunk. A `Func` that is nil is a 500, logged. It may be one of the types an interface return declares with [`Returns`](#returns).
 
 In the API document its content is `text/event-stream` with the schema `{"type": "string"}` and, under the extension `x-itemSchema`, one event: an object of `id`, `event`, `retry` and a required `data`, a string whose `contentMediaType` is `application/json` and whose `contentSchema` is `T`. It is the shape OpenAPI 3.2 gives an event under `itemSchema`, which 3.1 has no keyword for. An interface return that holds two `Events` states both under `oneOf`; one that also holds an `SSE` states no item, since an `SSE`'s data is any text.
 

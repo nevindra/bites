@@ -378,11 +378,13 @@ func WithoutParking() Option { return func(a *App) { a.noPark = true; a.custom["
 
 // App is a set of routes and the server that serves them. The zero value is not usable; call New.
 type App struct {
-	log         *slog.Logger
-	naming      NamingPolicy
-	formats     wire.Formats     // WithTextFormat (ADR 0042)
-	jsonSchemas wire.JSONSchemas // WithJSONSchema (ADR 0076)
-	testPlans   sync.Map         // reflect.Type -> *jsoncodec.Decoder: the plans bitetest reads answers with, nil for a type with none
+	log          *slog.Logger
+	naming       NamingPolicy
+	formats      wire.Formats         // WithTextFormat (ADR 0042)
+	jsonSchemas  wire.JSONSchemas     // WithJSONSchema (ADR 0076)
+	memberPlans  sync.Map             // reflect.Type -> *memberPlan: how the members of a status error are written (ADR 0088)
+	statedErrors map[statedError]bool // the (status, type) pairs a route states with ErrorStatus[T]
+	testPlans    sync.Map             // reflect.Type -> *jsoncodec.Decoder: the plans bitetest reads answers with, nil for a type with none
 
 	rejectUnknownQuery bool // WithRejectUnknownQueryKeys
 	limits             Limits
@@ -865,6 +867,11 @@ func (a *App) logSettings() {
 		log("websocket shutdown close spread, at most", spread, a.goAwaySpread > 0)
 	}
 	for _, u := range a.uploads {
+		if u.plain {
+			log("route "+u.label+": max body bytes", u.maxBody, true)
+			log("route "+u.label+": body timeout, derived from max body bytes", u.timeout, false)
+			continue
+		}
 		log("upload "+u.label+": max body bytes", u.maxBody, true)
 		log("upload "+u.label+": body timeout", u.timeout, u.timeoutExplicit)
 		if u.maxInFlight > 0 {

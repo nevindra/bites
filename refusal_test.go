@@ -165,6 +165,8 @@ type (
 			File bites.Upload
 		}
 	}
+	BodyReaderIn     struct{ Body bites.BodyReader }
+	BodyReaderInJSON struct{ Body struct{ File bites.BodyReader } }
 	UploadInList  struct{ Body []bites.Upload }
 	UploadInQuery struct{ Query struct{ File bites.Upload } }
 )
@@ -451,6 +453,15 @@ type (
 	}
 	BadItemsQuery struct {
 		Query struct{ L badItems }
+	}
+	RawJSONAnyBody struct {
+		Body struct{ Style bites.RawJSON[any] }
+	}
+	RawJSONPtrBody struct {
+		Body struct{ Style bites.RawJSON[*int] }
+	}
+	RawJSONFreeBody struct {
+		Body struct{ Style bites.RawJSON[json.RawMessage] }
 	}
 	EmptyFormatBody struct {
 		Body struct{ S emptyFormat }
@@ -878,6 +889,12 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 			"GET /x: ItemsOnStringQuery.Query.S: bites_test.itemsOnString has an Items method, but Items bounds a list: it is read on a named slice type, and bites_test.itemsOnString is a string", false},
 		{"an Items on a byte slice type", func(a *bites.App) { here(); a.Post("/x", ok[ItemsOnBytesBody]) },
 			"POST /x: ItemsOnBytesBody.Body.B: bites_test.itemsOnBytes has an Items method, but it decodes itself, so its items are not counted", false},
+		{"a RawJSON of an interface", func(a *bites.App) { here(); a.Post("/x", ok[RawJSONAnyBody]) },
+			"POST /x: RawJSONAnyBody.Body.Style: bites.RawJSON[interface {}] names no shape: an interface has none, so use json.RawMessage for any JSON", false},
+		{"a RawJSON of a pointer", func(a *bites.App) { here(); a.Post("/x", ok[RawJSONPtrBody]) },
+			"POST /x: RawJSONPtrBody.Body.Style: bites.RawJSON[*int]: null is already accepted, so name the type itself, RawJSON[int]", false},
+		{"a RawJSON of free-form JSON", func(a *bites.App) { here(); a.Post("/x", ok[RawJSONFreeBody]) },
+			"POST /x: RawJSONFreeBody.Body.Style: bites.RawJSON[encoding/json/jsontext.Value]: T is itself free-form JSON; use json.RawMessage, or name the shape the value has", false},
 		{"a list type whose Items is not a count, in Query", func(a *bites.App) { here(); a.Get("/x", ok[BadItemsQuery]) },
 			"GET /x: BadItemsQuery.Query.L: bites_test.badItems.Items returns (4, 2), which is not a count of items: it must be 0 <= min <= max with max at least 1", false},
 		{"a Format that returns an empty string", func(a *bites.App) { here(); a.Post("/x", ok[EmptyFormatBody]) },
@@ -1018,7 +1035,7 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 		{"an interface in Body", func(a *bites.App) { here(); a.Post("/x", ok[BodyAny]) },
 			"POST /x: BodyAny.Body.Extra: a field of interface type cannot be decoded", false},
 		{"a Body that is a string", func(a *bites.App) { here(); a.Post("/x", ok[BodyString]) },
-			"POST /x: BodyString.Body is string; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T] or Upload", false},
+			"POST /x: BodyString.Body is string; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T], Upload or BodyReader", false},
 		{"a Submitted of an int", func(a *bites.App) { here(); a.Post("/x", okPage[SubmittedOfInt]) },
 			"POST /x: SubmittedOfInt.Body is a Submitted of int; a Submitted wraps a struct whose fields are the form fields", false},
 		{"a Submitted form on a route that answers no Page", func(a *bites.App) { here(); a.Post("/x", ok[SubmittedForm]) },
@@ -1034,7 +1051,7 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 		{"a Form on a GET", func(a *bites.App) { here(); a.Get("/x", ok[FormOfInt]) },
 			"GET /x: FormOfInt.Body is a Body section, but a GET route has no request body", false},
 		{"a pointer to a Form", func(a *bites.App) { here(); a.Post("/x", ok[FormPtr]) },
-			"POST /x: FormPtr.Body is *bites.Form[struct { N string }]; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T] or Upload", false},
+			"POST /x: FormPtr.Body is *bites.Form[struct { N string }]; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T], Upload or BodyReader", false},
 		{"a Body that is an Opt of a scalar", func(a *bites.App) { here(); a.Post("/x", ok[BodyOpt]) },
 			"POST /x: BodyOpt.Body is Opt[string]; an Opt Body is a JSON body that may be absent, so it holds a struct, slice or map", false},
 		{"a Body that is an Opt of a Raw", func(a *bites.App) { here(); a.Post("/x", ok[BodyOptRaw]) },
@@ -1229,6 +1246,12 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 			"POST /x: UploadIn.Body is an Upload, but the route has no MaxBody: how much a route may receive is the application's decision (an avatar wants 2 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it", false},
 		{"an Upload route with timeout and in-flight limits but no MaxBody", func(a *bites.App) { here(); a.Post("/x", ok[UploadIn], bites.BodyTimeout(time.Minute)) },
 			"POST /x: UploadIn.Body is an Upload, but the route has no MaxBody: how much a route may receive is the application's decision (an avatar wants 2 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it", false},
+		{"a BodyReader route with no MaxBody", func(a *bites.App) { here(); a.Put("/x", ok[BodyReaderIn]) },
+			"PUT /x: BodyReaderIn.Body is a BodyReader, but the route has no MaxBody: how much a route may receive is the application's decision (a part wants 8 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it", false},
+		{"a BodyReader on a GET route", func(a *bites.App) { here(); a.Get("/x", ok[BodyReaderIn], bites.MaxBody(1<<20)) },
+			"GET /x: BodyReaderIn.Body is a Body section, but a GET route has no request body", false},
+		{"a BodyReader as a field of a JSON body", func(a *bites.App) { here(); a.Put("/x", ok[BodyReaderInJSON], bites.MaxBody(1<<20)) },
+			"PUT /x: BodyReaderInJSON.Body holds a BodyReader; a BodyReader is the whole Body, read as it arrives, not a field of a JSON body", false},
 		{"an Upload on a GET route", func(a *bites.App) { here(); a.Get("/x", ok[UploadIn], bites.MaxBody(1<<20)) },
 			"GET /x: UploadIn.Body is a Body section, but a GET route has no request body", false},
 		{"an Upload as a field of a JSON body", func(a *bites.App) { here(); a.Post("/x", ok[UploadInJSON], bites.MaxBody(1<<20)) },
@@ -2220,6 +2243,24 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 			a.Static("/s", at(bites.Static{FS: fstest.MapFS{}}), bites.ErrorStatuses(404))
 		},
 			"Static /s: ErrorStatuses states answers in the API document, which leaves static files out: give it to the typed routes instead", false},
+		{"ErrorStatus given 400, 401 or 429", func(a *bites.App) { here(); a.Get("/x", ok[Empty], bites.ErrorStatus[staleBlocks](429)) },
+			"GET /x: ErrorStatus[staleBlocks] is given 429, which the framework answers in a shape of its own (400 lists the Input's mistakes, 401 and 429 carry headers): use a status the handler decides, such as 409 or 422", false},
+		{"ErrorStatus given a status that is not an error", func(a *bites.App) { here(); a.Get("/x", ok[Empty], bites.ErrorStatus[staleBlocks](302)) },
+			"GET /x: ErrorStatus[staleBlocks] is given 302, which is not an error status: give a status from 400 to 599 the handler returns", false},
+		{"ErrorStatus given a type that is not a struct", func(a *bites.App) { here(); a.Get("/x", ok[Empty], bites.ErrorStatus[string](409)) },
+			"GET /x: ErrorStatus[string](409): the members of an error are the fields of a struct, so T must be a struct type, as ErrorStatus[StaleBlocks](409)", false},
+		{"ErrorStatus given one status twice", func(a *bites.App) {
+			a.Group("/g", bites.ErrorStatus[staleBlocks](409)).Get(at("/x"), ok[Empty], bites.ErrorStatus[staleBlocks](409))
+		},
+			"GET /g/x: ErrorStatus is given 409 twice: state the members of a status once, on the route or on its group", false},
+		{"ErrorStatus with a field that is a member of the problem", func(a *bites.App) { here(); a.Get("/x", ok[Empty], bites.ErrorStatus[clashingMembers](409)) },
+			`GET /x: ErrorStatus[clashingMembers](409): a field of clashingMembers is written as "title", a member the problem body already has (type, title, status, detail, instance, errors, truncated, request_id): give the field another wire name with a json tag`, false},
+		{"ErrorStatus for a status the framework answers on the route", func(a *bites.App) {
+			a.Post(at("/x"), ok[struct{ Body struct{ N int } }], bites.ErrorStatus[staleBlocks](413))
+		},
+			"POST /x: ErrorStatus[staleBlocks](413): the framework already answers 413 on this route with a shape of its own, so the document cannot state members for it: use a status the handler decides, such as 409 or 422", false},
+		{"ErrorStatus on an Undocumented route", func(a *bites.App) { here(); a.Get("/x", ok[Empty], bites.ErrorStatus[staleBlocks](409), bites.Undocumented()) },
+			"GET /x: ErrorStatus states answers in the API document, which Undocumented leaves this route out of: give one or the other", false},
 		{"MediaType given to a group", func(a *bites.App) { here(); a.Group("/g", bites.MediaType("text/csv")) },
 			`group "/g": MediaType is given to a group, but the routes of a group send different types: give it to each route`, false},
 		{"MediaType that is not a media type", func(a *bites.App) { here(); a.Get("/x", streamOK, bites.MediaType("ndjson")) },
@@ -2765,3 +2806,6 @@ type (
 		}
 	}
 )
+
+// clashingMembers has a field written as "title", which the problem body already has.
+type clashingMembers struct{ Title string }

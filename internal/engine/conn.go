@@ -797,6 +797,8 @@ func (c *conn) handle() bool {
 	isStream := !panicked && sc.resp.set && sc.resp.stream != nil
 	if isStream {
 		streamed, panicked = c.runStream(&f)
+	} else {
+		sc.resp.dropStream() // a panic after the terminal step: the function will never run
 	}
 
 	ctx.Finish()

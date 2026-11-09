@@ -61,6 +61,8 @@ type dnode struct {
 
 	check func(unsafe.Pointer) error // checked: the type's Check, run after elem decoded
 
+	acceptsNull bool // delegate: json.RawMessage, jsontext.Value and RawJSON take null as a value (ADR 0084)
+
 	items   *wire.Items   // slice: the type's Items and Unique rules (ADR 0021), nil when it has neither
 	members *wire.Members // map: the type's Members bound (ADR 0021), nil when it has none
 
@@ -211,6 +213,18 @@ func (c *dcompiler) compileValue(t reflect.Type, path string, inField bool) (*dn
 			return nil, refusal(path, "%s has a Format method naming %q, which the framework checks, but it decodes itself, so its format would not be checked: drop the Format or check in its UnmarshalText", t, fr.Name)
 		}
 		dn := &dnode{kind: dDelegate, typ: t, delMsg: msgValid}
+		if err := checkRawJSON(t, path); err != nil {
+			return nil, err
+		}
+		if elem, ok := wire.RawJSONOf(t); ok {
+			if _, err := c.compileValue(elem, path, false); err != nil {
+				return nil, err
+			}
+		}
+		dn.acceptsNull = t == rawMessageType || t == jsontextValue || isRawJSON(t)
+		if hasUnmarshaler(t) {
+			dn.delMsg = wire.UnmarshalError(t).Error()
+		}
 		if f, ok := c.opt.Formats[t]; ok {
 			dn.delMsg = wire.FormatError(f).Error()
 		}
@@ -653,7 +667,7 @@ func (s *state) value(n *dnode, dst unsafe.Pointer) (bool, error) {
 		*(*unsafe.Pointer)(dst) = nil
 		return true, nil
 	}
-	if k == 'n' && n.kind != dNull && n.kind != dOpt {
+	if k == 'n' && n.kind != dNull && n.kind != dOpt && !n.acceptsNull {
 		if _, err := s.dec.ReadValue(); err != nil {
 			return false, s.wrap(err)
 		}

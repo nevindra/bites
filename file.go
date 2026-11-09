@@ -1,7 +1,9 @@
 package bites
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"mime"
@@ -20,16 +22,26 @@ import (
 // File is a 200 whose body is a file (ADR 0043), sent with its Content-Length and its
 // Last-Modified and read in chunks as it is written: a file is never held whole in memory.
 //
-// Exactly one of Root and FS says where the file is, and Name is the path inside it, slash
-// separated. A Root is an os.Root, which cannot leave its directory: a Name with "..", a symbolic
+// Exactly one of Root, FS, Open and Content says where the file is. Root and FS are file systems
+// and Name is the path inside them, slash separated. A Root is an os.Root, which cannot leave its directory: a Name with "..", a symbolic
 // link that points out, and an absolute Name are refused by the operating system call itself
 // (Go 1.24). An FS is checked with fs.ValidPath first, so a Name with "..", a leading slash or an
 // empty element never reaches it. Either way the file's name is data from the client at worst, and
 // it cannot name anything outside the directory. A Name that is not valid, a file that does not
 // exist or that is not a regular file (a directory, a device) is a 404 problem+json, the same for
-// each, so an answer does not say which files exist. Both Root and FS set, or neither, is a 500
-// and logged, because it can only be a mistake. Any other failure to read the file is a 500,
-// logged.
+// each, so an answer does not say which files exist. None of the four set, or more than one, is a
+// 500 and logged, because it can only be a mistake (File is a return value, so this cannot be
+// caught at Registration). Any other failure to read the file is a 500, logged.
+//
+// Open and Content are for bytes that are not in a file system (ADR 0064). Open is called with the
+// request's context, which is cancelled when the client leaves (ADR 0016), only when a body is to
+// be sent: never for a HEAD, a 304, a 412 or a 416. It returns a reader positioned at the start,
+// and the answer closes it. Size must be the length of what Open returns; a reader whose length
+// differs is a 500 naming both. Content is the whole body, already in memory, and must not be
+// modified until the answer is sent. For both, Name is not looked up: it only gives the type
+// (through its extension) and a name for Attachment, and may be empty. ModTime gives
+// Last-Modified and the ETag; a zero ModTime gives neither, so put an ETag in Header. An Open
+// that returns an error that Is fs.ErrNotExist is a 404.
 //
 // ContentType is used when given; otherwise the type of the extension of Name (the system's MIME
 // table and a built-in one), and application/octet-stream when that has none. A Content-Type in
@@ -56,11 +68,27 @@ import (
 // Middleware sees a File as a Response with Streaming() true and Size() 0 (ADR 0030): it is
 // written by the same path as a Stream, with a declared length.
 type File struct {
-	// Root is the directory the file is read from; exactly one of Root and FS is set.
+	// Root is the directory the file is read from; exactly one of Root, FS, Open and Content is set.
 	Root *os.Root
-	// FS is the file system the file is read from; exactly one of Root and FS is set.
+	// FS is the file system the file is read from; exactly one of Root, FS, Open and Content is set.
 	FS fs.FS
-	// Name is the slash separated path of the file inside Root or FS.
+	// Open opens the content when a body is to be sent, with the request's context, which is
+	// cancelled when the client leaves, so a store call can carry it. The reader is at the start
+	// and is closed by the answer; it is Seeked for a range. Size must be set with it, and
+	// ModTime when the content has one. An error that Is fs.ErrNotExist is a 404, any other is a
+	// 500, logged. Exactly one of Root, FS, Open and Content is set; nil is not set.
+	Open func(ctx context.Context) (io.ReadSeekCloser, error)
+	// Size is the length in bytes of what Open returns; 0 is an empty body. Used only with Open.
+	Size int64
+	// ModTime is when the content last changed; the zero Time gives no Last-Modified and no made
+	// ETag. Used only with Open and Content.
+	ModTime time.Time
+	// Content is the whole body, already in memory. It must not be modified until the answer is
+	// sent. An empty body is Content: []byte{}, since a nil Content is not set. Exactly one of
+	// Root, FS, Open and Content is set.
+	Content []byte
+	// Name is the slash separated path of the file inside Root or FS; with Open and Content it
+	// is not looked up and only gives the type by its extension and a name for Attachment.
 	Name string
 	// ContentType is the media type sent; empty infers it from the extension of Name, or uses application/octet-stream.
 	ContentType string
@@ -89,6 +117,12 @@ func isFileType(t reflect.Type) bool {
 type fileAnswer struct {
 	root     *os.Root
 	fsys     fs.FS
+	open     func(ctx context.Context) (io.ReadSeekCloser, error)
+	content  []byte
+	hasBytes bool // content is set (a non-nil Content)
+	size     int64
+	mod      time.Time
+	ctx      context.Context
 	name     string // the file that is opened
 	typeName string // the name whose extension gives the type; name when empty (a twin's original)
 	ctype    string
@@ -115,6 +149,10 @@ type fileRun struct {
 	a    *App
 	root *os.Root
 	fsys fs.FS
+	open func(ctx context.Context) (io.ReadSeekCloser, error)
+	ctx  context.Context
+	data []byte // Content, when the source is bytes
+	mem  bool
 	name string
 	size int64 // the whole file, as the stat saw it
 	off  int64
@@ -122,6 +160,13 @@ type fileRun struct {
 }
 
 func (f *fileRun) Run(w *StreamWriter) error {
+	if f.mem {
+		_, err := w.Write(f.data[f.off : f.off+f.n])
+		return err
+	}
+	if f.open != nil {
+		return f.runOpen(w)
+	}
 	var file fs.File
 	var err error
 	if f.root != nil {
@@ -147,6 +192,31 @@ func (f *fileRun) Run(w *StreamWriter) error {
 	}
 	n, err := w.ReadFrom(file)
 	if err == nil && n != f.n {
+		err = io.ErrUnexpectedEOF
+	}
+	return err
+}
+
+// runOpen sends n bytes from off of what the File's Open returns, opened with the request's
+// context. It checks the length against Size first, which catches an Open that was given no Size.
+func (f *fileRun) runOpen(w *StreamWriter) error {
+	rc, err := f.open(f.ctx)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	end, err := rc.Seek(0, io.SeekEnd)
+	if err != nil {
+		return err
+	}
+	if end != f.size {
+		return fmt.Errorf("a File's Open returned %d bytes and its Size says %d: Size must be the length of what Open returns", end, f.size)
+	}
+	if _, err := rc.Seek(f.off, io.SeekStart); err != nil {
+		return err
+	}
+	got, err := w.ReadFrom(io.LimitReader(rc, f.n))
+	if err == nil && got != f.n {
 		err = io.ErrUnexpectedEOF
 	}
 	return err
@@ -187,7 +257,7 @@ func notThere(err error) bool {
 // writeFile builds the answer of a File. It stats the file now, so a missing one is an ordinary
 // 404 before anything is sent, and opens it only when the body is written, so a HEAD request, a
 // 304 and a 412 open nothing and a file is never left open by a response that is not written.
-func (p *outPlan) writeFile(a *App, ex *engine.Exchange, src unsafe.Pointer) {
+func (p *outPlan) writeFile(a *App, ex *engine.Exchange, src unsafe.Pointer, ctx context.Context) {
 	fa := fileAnswer{
 		root:     *(**os.Root)(unsafe.Add(src, p.rootOff)),
 		fsys:     *(*fs.FS)(unsafe.Add(src, p.fsOff)),
@@ -196,13 +266,37 @@ func (p *outPlan) writeFile(a *App, ex *engine.Exchange, src unsafe.Pointer) {
 		hdr:      *(*Header)(unsafe.Add(src, p.hdrOff)),
 		cookies:  *(*[]Cookie)(unsafe.Add(src, p.cookOff)),
 		download: *(*string)(unsafe.Add(src, p.attOff)),
+		open:     *(*func(context.Context) (io.ReadSeekCloser, error))(unsafe.Add(src, p.openOff)),
+		content:  *(*[]byte)(unsafe.Add(src, p.contentOff)),
+		size:     *(*int64)(unsafe.Add(src, p.sizeOff)),
+		mod:      *(*time.Time)(unsafe.Add(src, p.modOff)),
+		ctx:      ctx,
 	}
-	if (fa.root == nil) == (fa.fsys == nil) {
-		a.internalError(ex, refusalf("a File needs exactly one of Root and FS"))
+	fa.hasBytes = fa.content != nil
+	set := 0
+	for _, ok := range []bool{fa.root != nil, fa.fsys != nil, fa.open != nil, fa.hasBytes} {
+		if ok {
+			set++
+		}
+	}
+	if set != 1 {
+		a.internalError(ex, refusalf("a File needs exactly one of Root, FS, Open and Content, and has %d (for an empty body in memory give Content: []byte{}, since a nil Content is not set)", set))
+		return
+	}
+	if fa.open != nil && fa.size < 0 {
+		a.internalError(ex, refusalf("a File has the Size %d with Open; Size is the length in bytes of what Open returns and cannot be negative", fa.size))
 		return
 	}
 	if fa.ctype != "" && !validContentType(fa.ctype) {
 		a.internalError(ex, refusalf("a File has the content type %q, which is not type/subtype", fa.ctype))
+		return
+	}
+	if fa.hasBytes {
+		a.sendFile(ex, &fa, int64(len(fa.content)), fa.mod)
+		return
+	}
+	if fa.open != nil {
+		a.sendFile(ex, &fa, fa.size, fa.mod)
 		return
 	}
 	if !fs.ValidPath(fa.name) || fa.name == "." {
@@ -308,7 +402,7 @@ func (a *App) sendFile(ex *engine.Exchange, fa *fileAnswer, size int64, mod time
 	if !a.writeCookies(ex, r, fa.cookies) {
 		return
 	}
-	ex.StreamSized(n, &fileRun{a: a, root: fa.root, fsys: fa.fsys, name: fa.name, size: size, off: off, n: n})
+	ex.StreamSized(n, &fileRun{a: a, root: fa.root, fsys: fa.fsys, open: fa.open, ctx: fa.ctx, data: fa.content, mem: fa.hasBytes, name: fa.name, size: size, off: off, n: n})
 }
 
 // notModified writes the 304 of RFC 9110 section 15.4.5: the validators and the headers a cache

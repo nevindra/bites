@@ -1,13 +1,17 @@
 package bites_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -164,7 +168,7 @@ func TestAFileFromAnFSIsCheckedWithValidPathAndSentTheSame(t *testing.T) {
 	}
 }
 
-func TestAFileWithBothOrNeitherOfRootAndFSIsA500AndLogged(t *testing.T) {
+func TestAFileWithBothOrNeitherOfRootAndFSIsA500AndLoggedNamingAllFourSources(t *testing.T) {
 	root, _ := fileRoot(t)
 	srv, lb := startLogged(t, func(a *bites.App) {
 		a.Get("/none", func(context.Context, Empty) (bites.File, error) { return bites.File{Name: "x"}, nil })
@@ -180,7 +184,7 @@ func TestAFileWithBothOrNeitherOfRootAndFSIsA500AndLogged(t *testing.T) {
 			t.Errorf("%s: %d", p, r.Status)
 		}
 	}
-	if !strings.Contains(lb.String(), "a File needs exactly one of Root and FS") || !strings.Contains(lb.String(), `a File has the content type \"nonsense\"`) {
+	if !strings.Contains(lb.String(), "a File needs exactly one of Root, FS, Open and Content") || !strings.Contains(lb.String(), `a File has the content type \"nonsense\"`) {
 		t.Fatalf("log: %s", lb.String())
 	}
 }
@@ -527,5 +531,239 @@ func TestAFileWithAnAttachmentNameIsADownloadOnGetHeadRangeAndGzipButNotOnA304(t
 		}
 		oneDisposition(t, doFile(t, srv, "GET", target, map[string]string{"Accept-Encoding": "gzip"}), c.want)
 		oneDisposition(t, doFile(t, srv, "GET", target, map[string]string{"Range": "bytes=0-4"}), c.want)
+	}
+}
+
+// A File from Open or Content (ADR 0064): bytes that are not in a file system.
+
+// memReadSeeker is a ReadSeekCloser over bytes that counts its closes.
+type memReadSeeker struct {
+	*bytes.Reader
+	closed *atomic.Int32
+}
+
+func (m memReadSeeker) Close() error { m.closed.Add(1); return nil }
+
+func blobFile(data []byte, mod time.Time, opens, closes *atomic.Int32) bites.File {
+	return bites.File{
+		Name: "blob.txt", Size: int64(len(data)), ModTime: mod,
+		Open: func(context.Context) (io.ReadSeekCloser, error) {
+			opens.Add(1)
+			return memReadSeeker{bytes.NewReader(data), closes}, nil
+		},
+	}
+}
+
+func TestAFileFromOpenIsSentWithRangesValidatorsAndTypeAndClosedAfterwards(t *testing.T) {
+	data := []byte("0123456789abcdefghij")
+	var opens, closes atomic.Int32
+	srv := start(t, func(a *bites.App) {
+		a.Get("/b", func(context.Context, Empty) (bites.File, error) {
+			f := blobFile(data, time.Unix(1700000000, 0), &opens, &closes)
+			f.Attachment = "out.txt"
+			return f, nil
+		})
+	})
+	r := get(t, srv, "/b")
+	tag := r.Get("etag")
+	if r.Status != 200 || r.Text() != string(data) || r.Get("content-length") != "20" || tag == "" ||
+		r.Get("last-modified") != "Tue, 14 Nov 2023 22:13:20 GMT" || !strings.HasPrefix(r.Get("content-type"), "text/plain") ||
+		r.Get("accept-ranges") != "bytes" || r.Get("content-disposition") != `attachment; filename=out.txt` {
+		t.Fatalf("%d %v %q", r.Status, r.Header, r.Text())
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"Range": "bytes=10-14"}); r.Status != 206 || r.Text() != "abcde" || r.Get("content-range") != "bytes 10-14/20" {
+		t.Fatalf("%d %v %q", r.Status, r.Header, r.Text())
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"Range": "bytes=-3"}); r.Status != 206 || r.Text() != "hij" {
+		t.Fatalf("%d %q", r.Status, r.Text())
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"Range": "bytes=10-14", "If-Range": `"other"`}); r.Status != 200 || len(r.Body) != 20 {
+		t.Fatalf("a stale If-Range: %d", r.Status)
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"Range": "bytes=20-"}); r.Status != 416 || r.Get("content-range") != "bytes */20" {
+		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+	if opens.Load() != closes.Load() || opens.Load() != 4 {
+		t.Fatalf("opens %d closes %d: a 416 opens nothing, the other four open once and close", opens.Load(), closes.Load())
+	}
+}
+
+func TestHeadAnd304And412OfAFileFromOpenOpenNothingAndTheCurrentIfRangeSendsTheRange(t *testing.T) {
+	data := []byte("0123456789abcdefghij")
+	var opens, closes atomic.Int32
+	srv := start(t, func(a *bites.App) {
+		a.Get("/b", func(context.Context, Empty) (bites.File, error) {
+			return blobFile(data, time.Unix(1700000000, 0), &opens, &closes), nil
+		})
+	})
+	tag := get(t, srv, "/b").Get("etag")
+	opens.Store(0)
+	if r := doFile(t, srv, "HEAD", "/b", nil); r.Status != 200 || r.Get("content-length") != "20" || len(r.Body) != 0 {
+		t.Fatalf("HEAD %d %v", r.Status, r.Header)
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"If-None-Match": tag}); r.Status != 304 || len(r.Body) != 0 || r.Get("etag") != tag {
+		t.Fatalf("304: %d %v", r.Status, r.Header)
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"If-Match": `"stale"`}); r.Status != 412 {
+		t.Fatalf("412: %d", r.Status)
+	}
+	if opens.Load() != 0 {
+		t.Fatalf("HEAD, 304 and 412 opened %d times", opens.Load())
+	}
+	if r := doFile(t, srv, "GET", "/b", map[string]string{"Range": "bytes=0-4", "If-Range": tag}); r.Status != 206 || r.Text() != "01234" {
+		t.Fatalf("If-Range: %d %q", r.Status, r.Text())
+	}
+}
+
+func TestAFileFromContentIsSentWithRangesAndValidatorsAndAZeroModTimeGivesNone(t *testing.T) {
+	data := []byte("0123456789abcdefghij")
+	srv := start(t, func(a *bites.App) {
+		a.Get("/c", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Content: data, Name: "snap.json", ModTime: time.Unix(1700000000, 0)}, nil
+		})
+		a.Get("/z", func(context.Context, Empty) (bites.File, error) { return bites.File{Content: data}, nil })
+		a.Get("/e", func(context.Context, Empty) (bites.File, error) { return bites.File{Content: []byte{}}, nil })
+		a.Get("/ze", func(context.Context, Empty) (bites.File, error) {
+			h := bites.Header{}
+			h.Set("ETag", `"v7"`)
+			return bites.File{Content: data, Header: h}, nil
+		})
+	})
+	r := get(t, srv, "/c")
+	if r.Status != 200 || r.Text() != string(data) || r.Get("etag") == "" || r.Get("last-modified") == "" || !strings.HasPrefix(r.Get("content-type"), "application/json") {
+		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+	if r := doFile(t, srv, "GET", "/c", map[string]string{"Range": "bytes=5-9"}); r.Status != 206 || r.Text() != "56789" {
+		t.Fatalf("%d %q", r.Status, r.Text())
+	}
+	if r := doFile(t, srv, "GET", "/c", map[string]string{"If-None-Match": r.Get("etag")}); r.Status != 304 {
+		t.Fatalf("%d", r.Status)
+	}
+	if r := get(t, srv, "/z"); r.Status != 200 || r.Get("etag") != "" || r.Get("last-modified") != "" || r.Get("content-type") != "application/octet-stream" || r.Text() != string(data) {
+		t.Fatalf("zero ModTime: %d %v", r.Status, r.Header)
+	}
+	if r := get(t, srv, "/e"); r.Status != 200 || r.Get("content-length") != "0" || len(r.Body) != 0 {
+		t.Fatalf("empty: %d %v", r.Status, r.Header)
+	}
+	if r := doFile(t, srv, "GET", "/ze", map[string]string{"If-None-Match": `"v7"`}); r.Status != 304 {
+		t.Fatalf("own ETag with a zero ModTime: %d", r.Status)
+	}
+}
+
+func TestAFileFromOpenThatIsEmptyWithNoModTimeIsAnswered(t *testing.T) {
+	var opens, closes atomic.Int32
+	srv := start(t, func(a *bites.App) {
+		a.Get("/zero", func(context.Context, Empty) (bites.File, error) {
+			return blobFile(nil, time.Time{}, &opens, &closes), nil
+		})
+	})
+	if r := get(t, srv, "/zero"); r.Status != 200 || r.Get("content-length") != "0" || r.Get("etag") != "" || len(r.Body) != 0 {
+		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+}
+
+func TestAnOpenThatFailsIsA404WhenTheObjectIsGoneAndA500OtherwiseAndAWrongSizeIsA500NamingBoth(t *testing.T) {
+	srv, lb := startLogged(t, func(a *bites.App) {
+		a.Get("/gone", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Size: 3, Open: func(context.Context) (io.ReadSeekCloser, error) { return nil, fs.ErrNotExist }}, nil
+		})
+		a.Get("/down", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Size: 3, Open: func(context.Context) (io.ReadSeekCloser, error) { return nil, errors.New("store down") }}, nil
+		})
+		a.Get("/nosize", func(context.Context, Empty) (bites.File, error) {
+			var o, c atomic.Int32
+			f := blobFile([]byte("abc"), time.Time{}, &o, &c)
+			f.Size = 0
+			return f, nil
+		})
+	})
+	if r := get(t, srv, "/gone"); r.Status != 404 {
+		t.Errorf("gone: %d", r.Status)
+	}
+	if r := get(t, srv, "/down"); r.Status != 500 || strings.Contains(r.Text(), "store down") {
+		t.Errorf("down: %d %s", r.Status, r.Text())
+	}
+	if r := get(t, srv, "/nosize"); r.Status != 500 {
+		t.Errorf("nosize: %d", r.Status)
+	}
+	if !strings.Contains(lb.String(), "store down") || !strings.Contains(lb.String(), "Open returned 3 bytes and its Size says 0: Size must be the length of what Open returns") {
+		t.Fatalf("log: %s", lb.String())
+	}
+}
+
+func TestAFileWithNoSourceSeveralSourcesOrANegativeSizeIsA500AndLoggedSayingWhatToChange(t *testing.T) {
+	root, _ := fileRoot(t)
+	srv, lb := startLogged(t, func(a *bites.App) {
+		a.Get("/nil", func(context.Context, Empty) (bites.File, error) { return bites.File{Content: nil, Name: "x"}, nil })
+		a.Get("/two", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Root: root, Content: []byte("x"), Name: "hello.txt"}, nil
+		})
+		a.Get("/neg", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Size: -1, Open: func(context.Context) (io.ReadSeekCloser, error) { return nil, nil }}, nil
+		})
+	})
+	for _, p := range []string{"/nil", "/two", "/neg"} {
+		if r := get(t, srv, p); r.Status != 500 {
+			t.Errorf("%s: %d", p, r.Status)
+		}
+	}
+	for _, want := range []string{"exactly one of Root, FS, Open and Content, and has 0", "and has 2", "give Content: []byte{}", "Size -1 with Open"} {
+		if !strings.Contains(lb.String(), want) {
+			t.Errorf("log lacks %q: %s", want, lb.String())
+		}
+	}
+}
+
+// endless is a 2 GB reader of zeros that records its close.
+type endless struct {
+	pos    int64
+	closed chan struct{}
+}
+
+func (e *endless) Read(b []byte) (int, error) {
+	n := min(int64(len(b)), 2<<30-e.pos)
+	if n <= 0 {
+		return 0, io.EOF
+	}
+	e.pos += n
+	return int(n), nil
+}
+
+func (e *endless) Seek(off int64, whence int) (int64, error) {
+	switch whence {
+	case io.SeekEnd:
+		e.pos = 2 << 30
+	case io.SeekStart:
+		e.pos = off
+	}
+	return e.pos, nil
+}
+
+func (e *endless) Close() error { close(e.closed); return nil }
+
+func TestTheClientLeavingMidFileCancelsTheContextGivenToOpenAndClosesTheReader(t *testing.T) {
+	opened := make(chan context.Context, 1)
+	rd := &endless{closed: make(chan struct{})}
+	srv := start(t, func(a *bites.App) {
+		a.Get("/big", func(context.Context, Empty) (bites.File, error) {
+			return bites.File{Size: 2 << 30, Open: func(ctx context.Context) (io.ReadSeekCloser, error) {
+				opened <- ctx
+				return rd, nil
+			}}, nil
+		})
+	})
+	c := srv.Dial("203.0.113.9:4000")
+	c.Write([]byte("GET /big HTTP/1.1\r\nHost: x\r\nRange: bytes=0-\r\n\r\n"))
+	ctx := <-opened
+	c.Close()
+	select {
+	case <-ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the context given to Open was not cancelled when the client left")
+	}
+	select {
+	case <-rd.closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the reader was not closed after the client left")
 	}
 }

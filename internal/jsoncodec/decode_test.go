@@ -522,8 +522,8 @@ func TestATypeWithItsOwnUnmarshalerIsHandedToEncodingJSON(t *testing.T) {
 	}
 	_, errs, _ = decodeInto[in](t, declaresDecimal, `{"price":5,"tag":"bad","raw":3}`)
 	wantErrors(t, errs,
-		FieldError{Location: "price", Message: "expected a valid value"},
-		FieldError{Location: "tag", Message: "expected a valid value"},
+		FieldError{Location: "price", Message: "expected a valid value of type jsoncodec.decimal"},
+		FieldError{Location: "tag", Message: "expected a valid value of type jsoncodec.tag"},
 		FieldError{Location: "raw", Message: "expected a valid value"})
 }
 

@@ -84,7 +84,27 @@ Error returns `Message`, or the status and its text (`404 Not Found`) when the m
 func (e *StatusError) With(name string, value any) *StatusError
 ```
 
-With returns a copy that also carries a problem+json member, such as a machine-readable code. The members `title`, `status` and `detail` belong to the framework and are ignored. The extra members are written in name order, so the answer is the same bytes every time. The receiver is not changed.
+With returns a copy that also carries one problem+json member, such as a machine-readable code. The value is written by the response codec, so a struct in it has its wire names and an `Opt` is left out when empty, as in any answer; a type the codec refuses is written by `encoding/json/v2`. The members `title`, `status`, `detail` and `request_id` belong to the framework: one of those names is left out and logged at `WARN`. The extra members are written in name order, so the answer is the same bytes every time. The receiver is not changed. The API document does not know a member given here: data a client reads is given with [`WithMembers`](#withmembers) and stated with [`ErrorStatus`](./openapi.md#errorstatus). Decision: [ADR 0088](../adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md).
+
+### `WithMembers`
+
+```go
+func WithMembers[T any](e *StatusError, members T) *StatusError
+```
+
+WithMembers returns a copy that also carries the fields of `members`, a struct, as problem+json members, written by the response codec: wire names by the app's naming policy, an empty `Opt` left out. They come after `detail` and the members given with `With`, and before `request_id`. The route states the same type to the API document with [`ErrorStatus[T]`](./openapi.md#errorstatus), which refuses a field whose wire name is one of the problem's own (`type`, `title`, `status`, `detail`, `instance`, `errors`, `truncated`, `request_id`) at Registration. An error carries one `T`: a second call replaces the first. A member given with `With` under a name `T` has is left out and logged. Members of a type no route states for that status are sent and logged at `WARN`, naming the option to give; a value that is not a struct, or that the codec cannot write, is left out and logged at `ERROR`. The receiver is not changed. Allocations: none on a success; an error with members costs one more than one without. Decision: [ADR 0088](../adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md).
+
+<!-- compiles: decls -->
+
+```go
+type StaleBlocks struct {
+	Conflicts []string
+}
+
+func apply(ctx context.Context, in struct{}) (bites.NoContent, error) {
+	return bites.NoContent{}, bites.WithMembers(bites.Conflict("stale batch"), StaleBlocks{Conflicts: []string{"b1"}})
+}
+```
 
 ### `StatusError.WithHeader`
 
@@ -181,6 +201,14 @@ func NotFound(message string) *StatusError
 ```
 
 NotFound is a 404.
+
+### `Gone`
+
+```go
+func Gone(message string) *StatusError
+```
+
+Gone is a 410: the resource was here and is not any more, and will not come back at this address. Use it for a one-time or expiring link that was used up or ran out (an invitation, a password reset, a magic link, a download link), so a client stops retrying and asks for a new one. Use [`NotFound`](#notfound) when the address may simply be wrong, or the resource may never have existed.
 
 ### `Conflict`
 

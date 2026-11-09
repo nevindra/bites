@@ -49,7 +49,6 @@ var (
 	errTime      = &TextError{msg: "expected an RFC 3339 time with an offset", Rule: RuleType}
 	errUUID      = &TextError{msg: "expected a UUID", Rule: RuleType}
 	errDate      = &TextError{msg: "expected a date as YYYY-MM-DD", Rule: RuleType}
-	errUnmarshal = &TextError{msg: "expected a valid value", Rule: RuleType}
 )
 
 var (
@@ -89,6 +88,14 @@ func FormatError(format string) *TextError {
 		return errDate
 	}
 	return &TextError{msg: "expected a valid " + format, Rule: RuleType}
+}
+
+// UnmarshalError is the sentence a client is told when a value of t, a type with no registered
+// format that decodes itself with UnmarshalText, is refused: it names the type, so a client or an
+// agent reading the 400 knows which text form to send. It is built once, when the field is
+// compiled, and never contains the client's value or the method's own error text.
+func UnmarshalError(t reflect.Type) *TextError {
+	return &TextError{msg: "expected a valid value of type " + t.String(), Rule: RuleType}
 }
 
 // CompileTextWith is CompileText for an app that registered formats of its own.
@@ -157,7 +164,7 @@ func compileText(t reflect.Type, f Formats) (TextDecoder, error) {
 		return constrainedDecoder(t, c), nil
 	}
 	if t.Kind() != reflect.Pointer && reflect.PointerTo(t).Implements(textUnmarshalerType) {
-		return compileUnmarshaler(t, errUnmarshal), nil
+		return compileUnmarshaler(t, UnmarshalError(t)), nil
 	}
 	switch k := t.Kind(); k {
 	case reflect.String:

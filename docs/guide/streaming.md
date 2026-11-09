@@ -195,6 +195,32 @@ func follow(ctx context.Context, in Export) (bites.Stream, error) {
 
 At Shutdown an `SSE` or `Events` response ends with its terminating chunk (`EventSource` reconnects either way). A live `Stream` ends without its terminating chunk, so a client cannot mistake a cut feed for a complete one, whatever the function returns.
 
+## Giving back what the handler took
+
+**Take a limit in the handler and give it back in `Done`.** A per-person "one export at a time" turn is best taken in the handler, so a second request is an ordinary 429 before any byte, but the handler cannot tell a GET from a HEAD, and `Func` runs after the handler returns and not at all for a HEAD. `Done` is a field of `Stream`, `SSE` and `Events` that the engine calls exactly once when the response is over, so the release has one place:
+
+<!-- compiles: decls -->
+```go
+var exportTurns = make(chan struct{}, 1) // one export at a time
+
+func exportOnce(ctx context.Context, in Export) (bites.Stream, error) {
+	select {
+	case exportTurns <- struct{}{}:
+	default:
+		return bites.Stream{}, bites.TooManyRequests("an export is already running") // nothing taken, nothing to give back
+	}
+	return bites.Stream{
+		Done: func() { <-exportTurns },
+		Func: func(ctx context.Context, w *bites.StreamWriter) error {
+			_, err := w.WriteString("rows")
+			return err
+		},
+	}, nil
+}
+```
+
+`Done` runs once for every way the response can end: the function returned (nil, an error, a panic, a write that failed because the client left, a Shutdown cut), and in place of the function when it never runs (a HEAD, a nil `Func`, a status without a body, a middleware that replaced the answer, returned an error or panicked after the handler). It also runs for a `Stream` the handler returned together with an error. It runs on the connection's goroutine after the last byte, never at the same time as `Func`, and a panic in it is recovered and logged. A handler that takes something and then returns an error alone, without a `Stream`, gives it back itself, since no `Done` was returned. `Done` follows `Func`'s return: a `Func` that never returns holds what the handler took, so end it on its context.
+
 ## Slow clients and write deadlines
 
 **Every chunk of at most 64 KiB has the write timeout, so a client that stops reading cannot hold the connection for ever.** The engine arms the deadline before each chunk (30 seconds by default, see [limits](./limits.md#timeouts)), and only the total duration of the response is lifted. A write that fails because the client left or was too slow fails every later write too, and the connection is closed when the function returns. Return the error from the failed `Send` or `Write`, as the examples above do.
@@ -211,7 +237,7 @@ The deadline alone does not stop a slow reader of small events, because the kern
 - It is not compressed. [`WithGzip`](./deploying.md#compressing-responses) compresses a finished body and applies to values only ([ADR 0031](../adr/0031-gzip-only-and-off-by-default.md)).
 - A middleware sees it as `Streaming()` true with `Size()` 0: it can add headers and change the status before the head goes out, and cannot see or wrap the body ([middleware](./middleware.md#what-a-middleware-cannot-see)). A middleware that replaces it with a fresh `Response` means the function never runs. The [access log](./first-party-middleware.md#logging-each-request) records the head when the stream starts, not its end.
 - A [`Timeout`](./first-party-middleware.md#cutting-off-a-slow-handler) bounds the time to produce the stream and not its life; end a stream by a time with its own timer.
-- A HEAD request gets the head and no body, and the function does not run.
+- A HEAD request gets the head and no body, and the function does not run; its `Done` does ([below](#giving-back-what-the-handler-took)).
 
 **Three mistakes are refused at Registration for every stream** ([ADR 0007](../adr/0007-mistakes-are-refused-at-registration.md)): a pointer (`*Stream`, `*SSE`, `*Events[T]`), because a stream is returned by value; a stream as the `Body` of a wrapper such as `OK[SSE]`, because its status and headers are its own; and a HEAD route that returns a stream. An `Events` adds the refusals of its `T`, [above](#sending-typed-events).
 

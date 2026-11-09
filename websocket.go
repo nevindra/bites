@@ -1461,7 +1461,7 @@ func (a *App) compileMessage(p *wsPlan, t reflect.Type, unknown bool) error {
 		}
 		p.msgKind, p.dec, p.valOff, p.rawOff = bodyRaw, d, t.Field(0).Offset, t.Field(1).Offset
 		return nil
-	case t == uploadType || isOwn(t, "Form[") || isMultipart(t) || isSubmitted(t) || containsUpload(t, map[reflect.Type]bool{}):
+	case t == uploadType || isOwn(t, "Form[") || isMultipart(t) || isSubmitted(t) || t == bodyReaderType || containsUpload(t, map[reflect.Type]bool{}):
 		return refusalf("the Inbox's message type holds %s, which is a kind of request body; a message is JSON, []byte or Raw[T]", typeLabel(t))
 	}
 	switch t.Kind() {

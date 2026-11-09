@@ -34,7 +34,7 @@ The text Sections (`Path`, `Query`, `Header`, `Cookie`) decode each field by its
 - A repeated key for a field that is not a slice is a 400 `sent more than once`; a key the type does not have is ignored in `Query` unless the route asks for it to be refused ([`RejectUnknownQueryKeys`](#rejectunknownquerykeys)).
 - An empty value for a number (`?page=`) is a 400, not zero. A date with no time or offset is a 400 for a `time.Time`; a calendar date is a [`Date`](#date).
 - A section has at most 64 fields and 8 lists. A list whose request fills it costs one allocation ([ADR 0003](../adr/0003-the-trade-budget.md)).
-- A `TextUnmarshaler` error never reaches the client as written: the client gets `expected a valid value`.
+- A `TextUnmarshaler` error never reaches the client as written: the client gets `expected a valid value of type uuid.UUID` (the type, as Go spells it, worked out when the route is registered), or the sentence of the format when the type is registered with [`WithTextFormat`](./app.md#withtextformat).
 - The built-in types cost no allocation; a `TextUnmarshaler` costs two ([ADR 0042](../adr/0042-text-values-are-decoded-by-type.md)).
 
 A Section's struct may embed other structs by value, `Query struct{ Filter; Paging }`, and their fields are the Section's own, read under their own names; each embedded struct's `WireNames` names its own fields and its `Descriptions` describes them, and the Section's own method wins for a field both name or describe ([WireNames](#wirenames-method), [embedded sections](./openapi.md#descriptions-method)) ([embedded sections](./openapi.md#descriptions-method)). The optional methods of a Section's struct are `WireNames() map[string]string` (names no naming policy produces, checked against the fields), `Descriptions() map[string]string` ([openapi](./openapi.md#descriptions-method)), `Defaults() map[string]string` ([Defaults method](#defaults-method)), and, on the Input itself, `Validate() error` ([errors](./errors.md#invalid)).
@@ -535,6 +535,7 @@ The type of the `Body` Section decides how a request body is read ([ADR 0044](..
 | `Form[T]` | `application/x-www-form-urlencoded` | form fields, decoded like a Query section |
 | `Multipart[T]` | `multipart/form-data` | fields and files decoded into `T` before the handler runs |
 | `Upload` | `multipart/form-data` | a stream of parts, read by the handler |
+| `BodyReader` | any | the bytes as sent, as an `io.Reader` the handler reads while it arrives |
 
 A body whose `Content-Type` the route does not accept is a 415, a JSON body sent with none included. An empty `[]byte` body is allowed; an empty JSON or `Raw[T]` body is a 400 `required` at `body`, unless the Body is an `Opt[T]`. A body over `MaxBody` is a 413 and one that arrives too slowly is a 408. A JSON body with a member the type does not have is a 400 naming it (`unknown field`), unless the route has `AcceptUnknownMembers`. The decoder reports every error, not the first, up to 20, and nesting over `Limits.MaxDepth` is a 400 ([ADR 0015](../adr/0015-json-is-our-own-codec-on-jsontext.md)). A body that is a string, a pointer, or holds an interface is refused at Registration (`BodyString.Body is string; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T] or Upload`).
 
@@ -543,7 +544,7 @@ A body whose `Content-Type` the route does not accept is a 415, a JSON body sent
 | Mistake | Reason in the message |
 |---|---|
 | an `Opt` Body of a scalar | `POST /x: BodyOpt.Body is Opt[string]; an Opt Body is a JSON body that may be absent, so it holds a struct, slice or map` |
-| an `Opt` Body of a `Raw`, `Form`, `Multipart`, `Submitted`, `Upload` or `[]byte` | `POST /x: BodyOptRaw.Body is Opt[Raw[struct { N int }]]; an Opt Body is a JSON body that may be absent, and a Raw[struct { N int }] is a Body of its own: give it without Opt` |
+| an `Opt` Body of a `Raw`, `Form`, `Multipart`, `Submitted`, `Upload`, `BodyReader` or `[]byte` | `POST /x: BodyOptRaw.Body is Opt[Raw[struct { N int }]]; an Opt Body is a JSON body that may be absent, and a Raw[struct { N int }] is a Body of its own: give it without Opt` |
 
 Allocations: a typed JSON POST is 2; a body that did not all arrive with its head, or a chunked one, is 3; a `Form[T]` POST is 2; a `Multipart[T]` POST is 3, plus 2 for each file kept in memory ([ADR 0003](../adr/0003-the-trade-budget.md)).
 
@@ -631,6 +632,35 @@ type Raw[T any] struct {
 ```
 
 Raw is a Body that keeps the exact bytes beside the decoded value, for a webhook whose signature covers the bytes as sent: re-encoding `Value` does not reproduce them. It requires a JSON content type, like a struct body. The handler checks `Bytes()` against the signature with the secret its struct holds. As the message type of a WebSocket route it keeps the message's bytes ([websocket](./websocket.md#inbox)).
+
+### `RawJSON`
+
+```go
+type RawJSON[T any] = wire.RawJSON[T]
+```
+
+RawJSON is a JSON value the application owns and does not decode, read and written as bytes and described in the API document as `T` ([ADR 0087](../adr/0087-a-json-value-the-app-owns-is-raw-json-bytes-documented-as-a-type.md)): a patch of style fields an editor defines, a batch of operations. It is a member of a Body, an Output, a list, a map, an `Opt` or a `Null`, never a whole body (that is [`Raw`](#raw) or `[]byte`).
+
+Its one field, `JSON`, is the value exactly as it arrived, `null` included (the four bytes), or the bytes to send; an empty `JSON` is written as `null`. `MarshalJSON` and `UnmarshalJSON` (pointer receiver) are the methods that do this; `UnmarshalJSON` keeps a copy, so nothing pooled reaches the handler. `T` is not checked against the bytes: it only decides the schema, which is `T`'s own (a component for a struct) and allows `null` in a request and in a response. A handler that wants the bytes checked decodes `JSON` into `T` itself.
+
+`json.RawMessage` and `jsontext.Value` stay "any JSON", described as `{}`, and now accept `null` as the bytes `null` too; use `RawJSON` when the shape is known.
+
+Registration refuses a `T` that cannot be a shape, each a row of the refusal table: an interface (`bites.RawJSON[interface {}] names no shape: an interface has none, so use json.RawMessage for any JSON`), a pointer (`null is already accepted, so name the type itself, RawJSON[int]`), `json.RawMessage`, `jsontext.Value` or another `RawJSON` (`T is itself free-form JSON; use json.RawMessage, or name the shape the value has`), and any `T` the codec refuses as a field.
+
+<!-- compiles: decls -->
+
+```go
+type SuggestedCell struct {
+	Value string
+	// Style is a patch of Style fields: an object, or null when the Cell proposes none.
+	Style bites.RawJSON[StylePatch]
+}
+
+type StylePatch struct {
+	Bold  bool   `json:"bold"`
+	Color string `json:"color"`
+}
+```
 
 ### `Raw.Bytes`
 
@@ -771,13 +801,47 @@ func (p Part) Read(b []byte) (int, error)
 
 Read reads the part's body and returns `io.EOF` at its end. A Read after `Next` moved on fails with `ErrPartClosed`; after the handler returned, with `ErrUploadClosed`. A refused body returns a `*StatusError` as `Next` does.
 
+### `BodyReader`
+
+```go
+type BodyReader struct {
+	// Has unexported fields.
+}
+```
+
+BodyReader is a Body whose handler reads the request body as it arrives, as an `io.Reader`, whatever its media type: Upload for a body that is not multipart (a resumable upload's chunk sent as the raw body of a PUT or PATCH, or `PUT /files/{name}` with `Content-Type: application/pdf`). Nothing is buffered whole; `io.Copy(store, in.Body)` is a handler. The other Sections are decoded and `Validate` has run before the handler is called; the body has not been read.
+
+A BodyReader is valid only while the handler runs; after that `Read` fails with [`ErrUploadClosed`](#erruploadclosed), as does the zero value. A handler that returns before the end of the body leaves bytes unread, and the connection is closed after the answer. A request with no body reads as an empty one.
+
+Limits: the rules of an Upload. A BodyReader route must be given [`MaxBody`](#maxbody) on the route or a group above it; `BodyTimeout` defaults to `max(30 s, MaxBody / 128 KiB/s)` and covers the whole body from the first `Read`; [`MaxInFlight`](#maxinflight) bounds the bodies in flight. The media type is not checked (a handler that wants one reads the Header section); in the API document the body is `*/*` with the schema `{"type": "string", "format": "binary"}`.
+
+Refused at Registration:
+
+| Mistake | Reason in the message |
+|---|---|
+| no `MaxBody` on the route or a group above | `BodyReaderIn.Body is a BodyReader, but the route has no MaxBody: how much a route may receive is the application's decision (a part wants 8 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it` |
+| a BodyReader on a GET, HEAD or DELETE route | `BodyReaderIn.Body is a Body section, but a GET route has no request body` |
+| a BodyReader as a field of a JSON body, or a list of them | `BodyReaderInJSON.Body holds a BodyReader; a BodyReader is the whole Body, read as it arrives, not a field of a JSON body` |
+
+Allocations: 3 a request, as an Upload with no part; no window ([ADR 0003](../adr/0003-the-trade-budget.md)).
+
+Guide: [receiving a body as it arrives](../guide/forms-and-uploads.md#receiving-a-raw-body-as-it-arrives). Decision: [ADR 0044](../adr/0044-the-body-type-decides-how-a-body-is-read.md).
+
+### `BodyReader.Read`
+
+```go
+func (r BodyReader) Read(b []byte) (int, error)
+```
+
+Read reads the next bytes of the body into `b` and returns `io.EOF` at its end. It waits for the client on the connection's goroutine, up to the route's `BodyTimeout` for the whole body. A refused body (too large, too slow, cut short, a malformed chunked body) returns a `*StatusError` with the status the client should see, so returning it answers correctly. After the handler returned, it fails with `ErrUploadClosed`.
+
 ### `ErrUploadClosed`
 
 ```go
 var ErrUploadClosed = engine.ErrUploadClosed
 ```
 
-ErrUploadClosed is returned by an Upload or a Part used after its handler returned, so a goroutine that kept one cannot read another request's bytes ([ADR 0008](../adr/0008-no-pooled-object-reaches-the-user.md)). Test with `errors.Is(err, bites.ErrUploadClosed)`.
+ErrUploadClosed is returned by an Upload, a BodyReader or a Part used after its handler returned, so a goroutine that kept one cannot read another request's bytes ([ADR 0008](../adr/0008-no-pooled-object-reaches-the-user.md)). Test with `errors.Is(err, bites.ErrUploadClosed)`.
 
 ### `ErrPartClosed`
 
@@ -1079,7 +1143,7 @@ AcceptUnknownQueryKeys lets this route ignore query keys its `Query` section doe
 func MaxBody(n int64) RouteOption
 ```
 
-MaxBody sets the most bytes of request body this route (or every route of this group) reads; over it is a 413, before `100 Continue` when the `Content-Length` says so, and when the `n+1`th byte arrives for a chunked body. It must be positive. The default is `Limits.MaxBody`, 1 MiB. It is required for an Upload route.
+MaxBody sets the most bytes of request body this route (or every route of this group) reads; over it is a 413, before `100 Continue` when the `Content-Length` says so, and when the `n+1`th byte arrives for a chunked body. It must be positive. The default is `Limits.MaxBody`, 1 MiB. It is required for an Upload or a BodyReader route.
 
 Decision: [ADR 0024](../adr/0024-limits-are-on-by-default.md).
 
@@ -1089,7 +1153,7 @@ Decision: [ADR 0024](../adr/0024-limits-are-on-by-default.md).
 func BodyTimeout(d time.Duration) RouteOption
 ```
 
-BodyTimeout sets how long this route (or every route of this group) waits for its whole body; over it is a 408 and the connection is closed. It must be positive. The default is `Limits.BodyTimeout`, 30 s, and for an Upload route `max(30 s, MaxBody / 128 KiB/s)`.
+BodyTimeout sets how long this route (or every route of this group) waits for its whole body; over it is a 408 and the connection is closed. It must be positive. The default is `Limits.BodyTimeout`, 30 s, unless `MaxBody` makes `max(30 s, MaxBody / 128 KiB/s)` longer: that is the default of every route with a request body, an Upload and a BodyReader included, so a route with `MaxBody(8 MiB)` waits 64 s. The start-up log names a route whose timeout was derived.
 
 ### `MaxParts`
 
@@ -1105,4 +1169,4 @@ MaxParts sets the most parts one upload on this route (or on each Upload route o
 func MaxInFlight(n int) RouteOption
 ```
 
-MaxInFlight bounds the uploads of this route (or of each Upload route of this group, counted per route, not across the group) running at once. The counter is checked after the head and before `100 Continue`, and a request over it is answered 503 with `Retry-After` and the connection closed, so the client never sends the body. `n` must be positive. There is no default, because one would turn away legitimate traffic; the start-up log says `unlimited` for an Upload route without it. It has no effect on a route whose Body is not an Upload.
+MaxInFlight bounds the uploads of this route (or of each Upload route of this group, counted per route, not across the group) running at once. The counter is checked after the head and before `100 Continue`, and a request over it is answered 503 with `Retry-After` and the connection closed, so the client never sends the body. `n` must be positive. There is no default, because one would turn away legitimate traffic; the start-up log says `unlimited` for an Upload or BodyReader route without it. It has no effect on a route whose Body is not an Upload or a BodyReader.

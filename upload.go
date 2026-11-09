@@ -158,26 +158,7 @@ var uploadType = reflect.TypeFor[Upload]()
 
 // containsUpload reports whether t is, or holds at any depth, an Upload.
 func containsUpload(t reflect.Type, seen map[reflect.Type]bool) bool {
-	if t == uploadType {
-		return true
-	}
-	if seen[t] {
-		return false
-	}
-	seen[t] = true
-	switch t.Kind() {
-	case reflect.Pointer, reflect.Slice, reflect.Array:
-		return containsUpload(t.Elem(), seen)
-	case reflect.Map:
-		return containsUpload(t.Key(), seen) || containsUpload(t.Elem(), seen)
-	case reflect.Struct:
-		for i := range t.NumField() {
-			if containsUpload(t.Field(i).Type, seen) {
-				return true
-			}
-		}
-	}
-	return false
+	return containsType(t, uploadType, seen)
 }
 
 // readUpload opens the request body as an upload. It reads none of it: the handler does. It
@@ -231,6 +212,7 @@ type uploadRoute struct {
 	timeoutExplicit bool
 	maxInFlight     int
 	multipart       bool // a Multipart[T] route: its files wait in memory or on disk (ADR 0044)
+	plain           bool // a route whose body is read whole: only its limits are logged, and only when MaxBody moved the timeout
 }
 
 // multiparts reports whether any route reads a Multipart body.
@@ -261,5 +243,23 @@ func (a *App) planUpload(label string, cfg *routeConfig, multipart bool) {
 	if cfg.maxInFlight > 0 {
 		cfg.inflight = new(atomic.Int64)
 	}
-	a.uploads = append(a.uploads, uploadRoute{label, cfg.maxBody, cfg.bodyTimeout, explicit, cfg.maxInFlight, multipart})
+	a.uploads = append(a.uploads, uploadRoute{label, cfg.maxBody, cfg.bodyTimeout, explicit, cfg.maxInFlight, multipart, false})
+}
+
+// planBody settles the body timeout of a route whose body is read whole (JSON, Raw[T], []byte, a
+// form). Like an Upload's it is derived from MaxBody unless the route, a group or the app gave one
+// (ADR 0044, ADR 0024): a body of 8 MiB with the default 30 s would need 2.2 Mbit/s to arrive in
+// time, and a slower link would get a 408 on every request. The derivation changes nothing at or
+// below 3.75 MiB, where max(30 s, MaxBody / 128 KiB/s) is the default; a route above that is
+// logged at start with the timeout it got.
+func (a *App) planBody(label string, cfg *routeConfig) {
+	if cfg.bodyTimeoutSet || a.given.BodyTimeout > 0 {
+		return
+	}
+	d := max(engine.DefaultBodyTimeout, time.Duration(cfg.maxBody/uploadRate)*time.Second)
+	if d <= cfg.bodyTimeout {
+		return
+	}
+	cfg.bodyTimeout = d
+	a.uploads = append(a.uploads, uploadRoute{label: label, maxBody: cfg.maxBody, timeout: d, plain: true})
 }

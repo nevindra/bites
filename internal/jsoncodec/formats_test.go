@@ -73,7 +73,7 @@ func TestARegisteredTypeIsDescribedWithItsFormatAndToldTheFormatsSentence(t *tes
 	_, errs, _ := decodeInto[in](t, o, `{"id":"toolong"}`)
 	wantErrors(t, errs, FieldError{Location: "id", Message: "expected a UUID"})
 	_, errs, _ = decodeInto[in](t, Options{}, `{"id":"toolong"}`)
-	wantErrors(t, errs, FieldError{Location: "id", Message: "expected a valid value"})
+	wantErrors(t, errs, FieldError{Location: "id", Message: "expected a valid value of type jsoncodec.foreign"})
 	v, errs, _ := decodeInto[in](t, o, `{"id":"abcd"}`)
 	if len(errs.List) > 0 || string(v.ID[:]) != "abcd" {
 		t.Errorf("%v %q", errs.List, v.ID[:])

@@ -40,6 +40,7 @@ The shape of the body is taken from Huma. The reason for one shape is that, for 
 |---|---|
 | [0012](../adr/0012-client-errors-are-400-problem-json.md) | input mistakes are a 400 listing each field, and every error answer is problem+json |
 | [0078](../adr/0078-a-page-for-a-browser-is-a-page-and-a-form-it-shows-again-is-a-submitted-body.md) | a `Page` is HTML for a browser with 200 or a 4xx, and a `Submitted[T]` form hands its mistakes to the handler that shows it again |
+| [0088](../adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md) | an error that carries data sends a struct with `WithMembers` and states its type with `ErrorStatus[T]`, so the document and the wire agree, and `With` is written by the response codec |
 | [0049](../adr/0049-errors-are-found-with-errors-as-and-timeouts-wait.md) | a status is found with `errors.As`, a left client is not an error and a timed-out handler is waited for |
 
 ## Open questions

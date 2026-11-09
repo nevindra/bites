@@ -422,6 +422,7 @@ type Response struct {
 }
 
 func (r *Response) reset() {
+	r.dropStream()
 	r.set, r.status, r.head, r.body, r.ctype = false, 0, r.head[:0], r.body[:0], ""
 	r.stream, r.live, r.sized, r.length = nil, false, false, 0
 	r.upgrade = nil

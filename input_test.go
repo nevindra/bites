@@ -25,6 +25,25 @@ func jsonReq(method, target, body string) bitetest.Request {
 	return bitetest.Request{Method: method, Target: target, Body: []byte(body), Header: map[string][]string{"Content-Type": {"application/json"}}}
 }
 
+type rawEcho struct {
+	Any   json.RawMessage
+	Typed bites.RawJSON[struct{ Bold bool }]
+}
+
+func TestARawMessageAndARawJSONTakeNullOverHTTPAndAreEchoedUnchanged(t *testing.T) {
+	srv := startWith(t, func(app *bites.App) {
+		app.Post("/echo", func(_ context.Context, in struct{ Body rawEcho }) (rawEcho, error) { return in.Body, nil })
+	})
+	for _, body := range []string{`{"any":null,"typed":null}`, `{"any":{"a":[1]},"typed":{"bold":true}}`} {
+		if r := srv.Do(jsonReq("POST", "/echo", body)); r.Status != 200 || r.Text() != body {
+			t.Errorf("%s: %d %s", body, r.Status, r.Text())
+		}
+	}
+	if r := srv.Do(jsonReq("POST", "/echo", `{"any":1,"typed":null,"extra":null}`)); r.Status != 400 {
+		t.Errorf("an unknown member that is null: %d %s", r.Status, r.Text())
+	}
+}
+
 func wantProblem(t *testing.T, r bitetest.Response, status int, body string) {
 	t.Helper()
 	if r.Status != status || r.Get("content-type") != "application/problem+json" || r.Text() != body {
@@ -544,10 +563,10 @@ func TestARegisteredTextTypeThatDoesNotDecodeIsToldTheFormatsSentenceAndNeverIts
 		`{"location":"body.owner","message":"expected a UUID","rule":"type"}]}`)
 }
 
-func TestWithoutARegistrationTheSameTypeSaysExpectedAValidValue(t *testing.T) {
+func TestWithoutARegistrationTheSameTypeSaysExpectedAValidValueAndNamesItsType(t *testing.T) {
 	srv := start(t, func(app *bites.App) { app.Post("/things/{id}", idHandler) })
 	r := srv.Do(jsonReq("POST", "/things/short", `{"owner":"`+sampleHexID+`"}`))
-	wantProblem(t, r, 400, `{"title":"Bad Request","status":400,"errors":[{"location":"path.id","message":"expected a valid value","rule":"type"}]}`)
+	wantProblem(t, r, 400, `{"title":"Bad Request","status":400,"errors":[{"location":"path.id","message":"expected a valid value of type bites_test.thirdPartyID","rule":"type"}]}`)
 }
 
 func TestARegisteredTextTypeIsDocumentedAsAStringWithItsFormatInRequestsAndResponses(t *testing.T) {

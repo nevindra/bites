@@ -42,6 +42,7 @@ const (
 	KindPtr      // Elem, encoding only
 	KindOpt      // Elem
 	KindNull     // Elem
+	KindRaw      // Elem: a RawJSON, any JSON that the document describes as Elem (ADR 0084)
 	KindUnion    // Fields, one a variant: Name is its tag and Type its struct; Tag is the discriminator
 )
 
@@ -106,6 +107,9 @@ func Describe(t reflect.Type, o Options, dir Direction) (Shape, error) {
 			return Shape{Kind: KindOpt, Elem: elem}, nil
 		}
 		return Shape{Kind: KindNull, Elem: elem}, nil
+	}
+	if elem, ok := wire.RawJSONOf(t); ok {
+		return Shape{Kind: KindRaw, Elem: elem}, nil
 	}
 	switch t {
 	case timeType:

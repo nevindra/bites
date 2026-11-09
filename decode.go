@@ -477,6 +477,9 @@ func (b *bodyPlan) read(a *App, ex *engine.Exchange, in unsafe.Pointer, errs *js
 	if b.kind == bodyUpload {
 		return b.readUpload(a, ex, in, errs, cfg)
 	}
+	if b.kind == bodyReader {
+		return b.readBodyReader(ex, in, errs, cfg)
+	}
 	if b.kind == bodyMultipart {
 		// The other sections are decoded first, and a mistake in one is answered before a byte of
 		// the body is read (so a client that sent Expect: 100-continue never sends it).

@@ -852,3 +852,93 @@ func FuzzAMultipartForm(f *testing.F) {
 		}
 	})
 }
+
+// wordFile is a file field that embeds FormFile and sets its own limits, as an application's does.
+type wordFile struct{ bites.FormFile }
+
+func (wordFile) Accept() []string {
+	return []string{"application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+}
+func (wordFile) MaxSize() int64 { return 4 << 20 }
+
+type nameOut struct {
+	FileName    string `json:"file"`
+	ContentType string `json:"type"`
+	Name        string `json:"name"`
+	Size        int64  `json:"size"`
+	Sum         string `json:"sum"`
+}
+
+// nameBodySizes cross the read window, the 256 KiB the request keeps in memory, and a few reads.
+var nameBodySizes = []int{5, 5 << 10, 100 << 10, 300 << 10, 2 << 20}
+
+const docxType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+func registerNameForm(a *bites.App) {
+	a.Post("/word", func(_ context.Context, in struct {
+		Body bites.Multipart[struct{ File wordFile }]
+	}) (nameOut, error) {
+		f := in.Body.Value.File
+		d, err := describe(f.FormFile)
+		if err != nil {
+			return nameOut{}, err
+		}
+		return nameOut{f.FileName, f.ContentType, f.Name, f.Size, d.Sum}, nil
+	}, bites.MaxBody(8<<20))
+}
+
+func nameWant(data string) string {
+	return `{"file":"Notes.docx","type":"` + docxType + `","name":"file","size":` + strconv.Itoa(len(data)) + `,"sum":"` + sumOf(data) + `"}`
+}
+
+func TestAFilesNameAndTypeSurviveTheReadingOfItsBytesWhateverItsSize(t *testing.T) {
+	srv := startMP(t, registerNameForm, bites.Limits{})
+	for _, n := range nameBodySizes {
+		data := "[Content_Types].xml" + filler(n)
+		body := fileField("file", "Notes.docx", docxType, data) + closing()
+		r := doRaw(t, srv, mpRequest("/word", body))
+		if r.Status != 200 || r.Text() != nameWant(data) {
+			t.Fatalf("%d bytes: %d\n%s\nwant\n%s", n, r.Status, r.Text(), nameWant(data))
+		}
+		c := srv.Dial("203.0.113.9:4000")
+		fmt.Fprint(c, upHead("POST", "/word", "Transfer-Encoding: chunked\r\n\r\n")+chunked(body, 37))
+		r = srv.Read(c, false)
+		c.Close()
+		if r.Status != 200 || r.Text() != nameWant(data) {
+			t.Fatalf("%d bytes chunked: %d\n%s", n, r.Status, r.Text())
+		}
+	}
+}
+
+func TestAFilesNameAndTypeSurviveTheReadingOfItsBytesOnARealSocket(t *testing.T) {
+	app := bites.New(bites.WithLimits(bites.Limits{UploadDir: t.TempDir()}))
+	registerNameForm(app)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go app.Serve(ln)
+	t.Cleanup(func() { app.Close() })
+	for _, n := range nameBodySizes {
+		data := "[Content_Types].xml" + filler(n)
+		c, err := net.Dial("tcp", ln.Addr().String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.SetDeadline(time.Now().Add(10 * time.Second))
+		go c.Write([]byte(mpRequest("/word", fileField("file", "Notes.docx", docxType, data)+closing())))
+		buf := make([]byte, 0, 1024)
+		tmp := make([]byte, 1024)
+		for !strings.Contains(string(buf), `"sum"`) {
+			k, err := c.Read(tmp)
+			buf = append(buf, tmp[:k]...)
+			if err != nil {
+				break
+			}
+		}
+		c.Close()
+		if !strings.Contains(string(buf), nameWant(data)) {
+			t.Fatalf("%d bytes: %s\nwant %s", n, buf, nameWant(data))
+		}
+	}
+}

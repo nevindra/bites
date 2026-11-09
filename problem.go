@@ -4,6 +4,7 @@ import (
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"math"
+	"reflect"
 	"slices"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ type StatusError struct {
 	// Message is the detail of the answer, and the only text of the error the client sees.
 	Message string
 	members map[string]any
+	typed   any // WithMembers: a struct whose fields are members, written by the response codec
 	headers []headerPair
 }
 
@@ -43,8 +45,12 @@ func (e *StatusError) Error() string {
 	return e.Message
 }
 
-// With returns a copy that also carries a problem+json member, such as a machine-readable code
-// (ADR 0049). The members title, status and detail belong to the framework and are ignored.
+// With returns a copy that also carries one problem+json member, such as a machine-readable code
+// (ADR 0049): With("code", "duplicate"). The value is written by the response codec, so a struct
+// in it has its wire names and an Opt is left out when empty, as in any answer. The members
+// title, status, detail and request_id belong to the framework: one of those names is left out
+// and logged. The API document does not know a member given here; members that a client reads
+// are given as a struct with WithMembers and stated with ErrorStatus.
 func (e *StatusError) With(name string, value any) *StatusError {
 	c := *e
 	c.members = make(map[string]any, len(e.members)+1)
@@ -52,6 +58,27 @@ func (e *StatusError) With(name string, value any) *StatusError {
 		c.members[k] = v
 	}
 	c.members[name] = value
+	return &c
+}
+
+// WithMembers returns a copy that also carries the fields of members as problem+json members,
+// written by the response codec (wire names, Opt left out when empty). It is how an error sends
+// data a client reads, and the route states the same type to the API document with
+// ErrorStatus[T] (ADR 0088):
+//
+//	type StaleBlocks struct{ Conflicts []Conflict }
+//
+//	return bites.WithMembers(bites.Conflict("stale batch"), StaleBlocks{Conflicts: cs})
+//
+// T is a struct, not a pointer; a field whose wire name is one of the problem's own (type, title,
+// status, detail, instance, errors, truncated, request_id) is refused by ErrorStatus[T] at
+// Registration. An error carries one T: a second call replaces the first. A route that returns
+// members for a status without stating ErrorStatus[T](status) still sends them, and logs a warning
+// that the document does not describe them. A member given with With under a name T has is left
+// out and logged.
+func WithMembers[T any](e *StatusError, members T) *StatusError {
+	c := *e
+	c.typed = members
 	return &c
 }
 
@@ -188,6 +215,12 @@ func Forbidden(message string) *StatusError { return NewError(403, message) }
 
 // NotFound is a 404.
 func NotFound(message string) *StatusError { return NewError(404, message) }
+
+// Gone is a 410: the resource was here and is not any more, and will not come back at this
+// address. Use it for a one-time or expiring link that was used up or ran out (an invitation, a
+// password reset, a magic link, a download link), so a client stops retrying and asks for a new
+// one. Use NotFound when the address may simply be wrong, or the resource may never have existed.
+func Gone(message string) *StatusError { return NewError(410, message) }
 
 // Conflict is a 409.
 func Conflict(message string) *StatusError { return NewError(409, message) }
@@ -343,23 +376,122 @@ func (a *App) statusAnswer(ex *engine.Exchange, se *StatusError) {
 	}
 	b := r.Body()
 	*b = appendProblemHead(*b, status, se.Message)
+	var taken map[string]struct{}
+	if se.typed != nil {
+		taken = a.appendTyped(b, se)
+	}
 	for _, k := range slices.Sorted(mapKeys(se.members)) {
 		switch k {
-		case "title", "status", "detail":
+		case "title", "status", "detail", "request_id":
+			a.log.Warn("bites: a status error member was left out: its name belongs to the problem body", "member", k, "status", status)
 			continue
 		}
-		v, err := jsonv2.Marshal(se.members[k])
-		if err != nil {
-			a.log.Warn("bites: a status error member could not be encoded", "member", k, "err", err)
+		if _, ok := taken[k]; ok {
+			a.log.Warn("bites: a status error member was left out: the type given to WithMembers has a field of this name", "member", k, "status", status)
 			continue
 		}
+		before := len(*b)
 		*b = append(*b, ',')
 		*b = appendQuoted(*b, k)
 		*b = append(*b, ':')
-		*b = append(*b, v...)
+		var err error
+		if *b, err = a.appendMember(*b, se.members[k]); err != nil {
+			*b = (*b)[:before]
+			a.log.Warn("bites: a status error member could not be encoded", "member", k, "err", err)
+		}
 	}
 	*b = appendRequestID(*b, ex.RequestID())
 	*b = append(*b, '}')
+}
+
+// memberPlan is how the members of one Go type are written: the response codec's plan, and the
+// wire names of its fields when the type is a struct.
+type memberPlan struct {
+	enc   *jsoncodec.Encoder
+	names map[string]struct{}
+}
+
+// memberPlanOf returns the plan for t, compiled once and kept; a type the codec refuses has a nil
+// plan, with the reason in err the first time.
+func (a *App) memberPlanOf(t reflect.Type) (*memberPlan, error) {
+	if c, ok := a.memberPlans.Load(t); ok {
+		return c.(*memberPlan), nil
+	}
+	opts := jsoncodec.Options{Names: a.naming, Formats: a.formats, JSONSchemas: a.jsonSchemas}
+	enc, err := jsoncodec.CompileEncoder(t, opts)
+	if err != nil {
+		a.memberPlans.Store(t, (*memberPlan)(nil))
+		return nil, err
+	}
+	mp := &memberPlan{enc: enc}
+	if t.Kind() == reflect.Struct {
+		sh, err := jsoncodec.Describe(t, opts, jsoncodec.Encoding)
+		if err == nil {
+			mp.names = make(map[string]struct{}, len(sh.Fields))
+			for _, f := range sh.Fields {
+				mp.names[f.Name] = struct{}{}
+			}
+		}
+	}
+	a.memberPlans.Store(t, mp)
+	return mp, nil
+}
+
+// appendMember writes v with the response codec. A type the codec refuses is written by
+// encoding/json/v2 instead, so a member is never lost to a type the codec cannot plan.
+func (a *App) appendMember(b []byte, v any) ([]byte, error) {
+	if v == nil {
+		return append(b, "null"...), nil
+	}
+	rv := reflect.ValueOf(v)
+	if mp, _ := a.memberPlanOf(rv.Type()); mp != nil {
+		p := reflect.New(rv.Type())
+		p.Elem().Set(rv)
+		if out, err := mp.enc.Append(b, p.UnsafePointer()); err == nil {
+			return out, nil
+		}
+	}
+	enc, err := jsonv2.Marshal(v)
+	if err != nil {
+		return b, err
+	}
+	return append(b, enc...), nil
+}
+
+// appendTyped writes the fields of the struct WithMembers gave as members of the body, and
+// returns their wire names. A value that is not a struct, or that the codec cannot write, is left
+// out and logged; a pair of status and type that no route states with ErrorStatus is written and
+// logged, because the API document does not describe it.
+func (a *App) appendTyped(b *[]byte, se *StatusError) map[string]struct{} {
+	rv := reflect.ValueOf(se.typed)
+	t := rv.Type()
+	if t.Kind() != reflect.Struct {
+		a.log.Error("bites: WithMembers was given a value that is not a struct, so its members are left out: give a struct, as WithMembers(err, Details{...})", "type", t.String(), "status", se.Status)
+		return nil
+	}
+	mp, err := a.memberPlanOf(t)
+	if mp == nil {
+		a.log.Error("bites: the type given to WithMembers cannot be written as JSON, so its members are left out", "type", t.String(), "status", se.Status, "err", err)
+		return nil
+	}
+	if !a.statedErrors[statedError{se.Status, t}] {
+		a.log.Warn("bites: members were sent that no route states, so the API document does not describe them: give the route ErrorStatus["+t.String()+"]("+strconv.Itoa(se.Status)+")", "type", t.String(), "status", se.Status)
+	}
+	p := reflect.New(t)
+	p.Elem().Set(rv)
+	start := len(*b)
+	out, err := mp.enc.Append(*b, p.UnsafePointer())
+	if err != nil {
+		a.log.Error("bites: the members given to WithMembers could not be written, so they are left out", "type", t.String(), "status", se.Status, "err", err)
+		return nil
+	}
+	if len(out)-start <= 2 { // {}: no member to write
+		*b = out[:start]
+		return mp.names
+	}
+	out[start] = ','
+	*b = out[:len(out)-1]
+	return mp.names
 }
 
 // engineHeader reports whether name is a header the framework or the engine writes itself.

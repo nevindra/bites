@@ -661,3 +661,306 @@ func TestAStreamWithAnAttachmentNameIsADownloadOnGetHeadAndGzip(t *testing.T) {
 		oneDisposition(t, s.Do(bitetest.Request{Method: "GET", Target: target, Header: map[string][]string{"Accept-Encoding": {"gzip"}}}), c.want)
 	}
 }
+
+// ---- Done: the end of a response, whichever way it comes (ADR 0030) ----
+
+// doneRoute registers /s whose handler takes a turn (taken++) and returns a Stream carrying Done
+// (done++), with fn as its Func; /e does the same and returns the Stream together with an error.
+func doneRoute(taken, done *atomic.Int64, fn func(context.Context, *bites.StreamWriter) error) func(*bites.App) {
+	return func(a *bites.App) {
+		a.Get("/s", func(context.Context, Empty) (bites.Stream, error) {
+			taken.Add(1)
+			return bites.Stream{Func: fn, Done: func() { done.Add(1) }}, nil
+		})
+		a.Get("/e", func(context.Context, Empty) (bites.Stream, error) {
+			taken.Add(1)
+			return bites.Stream{Func: fn, Done: func() { done.Add(1) }}, errors.New("refused after taking the turn")
+		})
+	}
+}
+
+// settled waits for every request to end and fails unless Done ran exactly once for each turn taken.
+func settled(t *testing.T, s *bitetest.Server, taken, done *atomic.Int64) {
+	t.Helper()
+	s.WaitEnded()
+	if taken.Load() != done.Load() || done.Load() != 1 {
+		t.Fatalf("turns taken %d, Done called %d times; want one of each", taken.Load(), done.Load())
+	}
+}
+
+func TestADoneOfAStreamRunsOnceAfterTheBodyOfAGET(t *testing.T) {
+	var taken, done, atEnd atomic.Int64
+	s := start(t, doneRoute(&taken, &done, func(_ context.Context, w *bites.StreamWriter) error {
+		atEnd.Store(done.Load())
+		_, err := w.WriteString("body")
+		return err
+	}))
+	if rp := get(t, s, "/s"); rp.Status != 200 || rp.Text() != "body" {
+		t.Fatalf("%d %q", rp.Status, rp.Text())
+	}
+	settled(t, s, &taken, &done)
+	if atEnd.Load() != 0 {
+		t.Fatal("Done ran before the function did")
+	}
+}
+
+func TestADoneOfAStreamRunsOnceForAHEADWhoseFunctionNeverRan(t *testing.T) {
+	var taken, done, ran atomic.Int64
+	s := start(t, doneRoute(&taken, &done, func(context.Context, *bites.StreamWriter) error {
+		ran.Add(1)
+		return nil
+	}))
+	if rp := s.Do(bitetest.Request{Method: "HEAD", Target: "/s"}); rp.Status != 200 || rp.Text() != "" {
+		t.Fatalf("%d %q", rp.Status, rp.Text())
+	}
+	settled(t, s, &taken, &done)
+	if ran.Load() != 0 {
+		t.Fatal("the function ran for a HEAD")
+	}
+}
+
+func TestADoneOfAStreamRunsOnceWhenTheClientLeavesMidStream(t *testing.T) {
+	var taken, done atomic.Int64
+	started := make(chan struct{})
+	s := start(t, doneRoute(&taken, &done, func(ctx context.Context, w *bites.StreamWriter) error {
+		w.WriteString("first")
+		w.Flush()
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	}))
+	c := s.Dial("203.0.113.9:4000")
+	c.Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n"))
+	<-started
+	c.Close()
+	settled(t, s, &taken, &done)
+}
+
+func TestADoneOfAStreamRunsOnceWhenAWriteFailsBecauseTheClientIsGone(t *testing.T) {
+	var taken, done atomic.Int64
+	gone := make(chan struct{})
+	s := start(t, doneRoute(&taken, &done, func(_ context.Context, w *bites.StreamWriter) error {
+		w.WriteString("first")
+		w.Flush()
+		<-gone
+		for {
+			if _, err := w.WriteString(strings.Repeat("x", 1<<16)); err != nil {
+				return err
+			}
+			if err := w.Flush(); err != nil {
+				return err
+			}
+		}
+	}))
+	c := s.Dial("203.0.113.9:4000")
+	c.Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n"))
+	c.Close()
+	close(gone)
+	settled(t, s, &taken, &done)
+}
+
+func TestADoneOfAStreamRunsOnceWhenItsFunctionReturnsAnErrorBeforeOrAfterTheFirstByte(t *testing.T) {
+	for name, fn := range map[string]func(context.Context, *bites.StreamWriter) error{
+		"before": func(context.Context, *bites.StreamWriter) error { return errors.New("boom") },
+		"after": func(_ context.Context, w *bites.StreamWriter) error {
+			w.WriteString("x")
+			w.Flush()
+			return errors.New("boom")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var taken, done atomic.Int64
+			s := start(t, doneRoute(&taken, &done, fn))
+			s.Dial("203.0.113.9:4000").Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n")) // the cut stream is no response to read
+			settled(t, s, &taken, &done)
+		})
+	}
+}
+
+func TestADoneOfAStreamRunsOnceWhenItsFunctionPanicsBeforeOrAfterTheFirstByte(t *testing.T) {
+	for name, fn := range map[string]func(context.Context, *bites.StreamWriter) error{
+		"before": func(context.Context, *bites.StreamWriter) error { panic("boom") },
+		"after": func(_ context.Context, w *bites.StreamWriter) error {
+			w.WriteString("x")
+			w.Flush()
+			panic("boom")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var taken, done atomic.Int64
+			s := start(t, doneRoute(&taken, &done, fn))
+			s.Dial("203.0.113.9:4000").Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n")) // the cut stream is no response to read
+			settled(t, s, &taken, &done)
+		})
+	}
+}
+
+func TestADoneOfAStreamRunsOnceWhenAMiddlewareReplacesTheResponseOrFailsOrPanics(t *testing.T) {
+	for _, mode := range []string{"replace", "error", "panic"} {
+		t.Run(mode, func(t *testing.T) {
+			var taken, done, ran atomic.Int64
+			s := start(t, func(a *bites.App) {
+				a.Use(func(ctx context.Context, _ bites.Request, next bites.Next) (bites.Response, error) {
+					res := next.Call(ctx)
+					switch mode {
+					case "replace":
+						return bites.Problem(403, "no"), nil
+					case "error":
+						return res, errors.New("late failure")
+					}
+					panic("late panic")
+				})
+				doneRoute(&taken, &done, func(context.Context, *bites.StreamWriter) error {
+					ran.Add(1)
+					return nil
+				})(a)
+			})
+			if rp := get(t, s, "/s"); rp.Status < 400 {
+				t.Fatalf("status %d, want the middleware's answer", rp.Status)
+			}
+			settled(t, s, &taken, &done)
+			if ran.Load() != 0 {
+				t.Fatal("the function ran although the response was replaced")
+			}
+		})
+	}
+}
+
+func TestADoneOfAStreamRunsOnceWhenTheHandlerReturnsItWithAnError(t *testing.T) {
+	var taken, done, ran atomic.Int64
+	s := start(t, doneRoute(&taken, &done, func(context.Context, *bites.StreamWriter) error {
+		ran.Add(1)
+		return nil
+	}))
+	if rp := get(t, s, "/e"); rp.Status != 500 {
+		t.Fatalf("status %d, want the error's 500", rp.Status)
+	}
+	settled(t, s, &taken, &done)
+	if ran.Load() != 0 {
+		t.Fatal("the function ran")
+	}
+}
+
+func TestADoneOfAStreamRunsOnceWhenItsFuncIsNilAndTheAnswerIsALogged500(t *testing.T) {
+	var taken, done atomic.Int64
+	s := start(t, doneRoute(&taken, &done, nil))
+	if rp := get(t, s, "/s"); rp.Status != 500 {
+		t.Fatalf("status %d", rp.Status)
+	}
+	settled(t, s, &taken, &done)
+}
+
+func TestADoneOfAnSSEAndOfAnEventsRunsOnceForAGETAndForAHEAD(t *testing.T) {
+	var sse, ev atomic.Int64
+	s := start(t, func(a *bites.App) {
+		a.Get("/sse", func(context.Context, Empty) (bites.SSE, error) {
+			return bites.SSE{Done: func() { sse.Add(1) }, Func: func(_ context.Context, e bites.EventWriter) error {
+				return e.Send(bites.Event{Data: "x"})
+			}}, nil
+		})
+		a.Get("/ev", func(context.Context, Empty) (bites.Events[int], error) {
+			return bites.Events[int]{Done: func() { ev.Add(1) }, Func: func(_ context.Context, e bites.EventSender[int]) error {
+				return e.Send("", 1)
+			}}, nil
+		})
+	})
+	for _, m := range []string{"GET", "HEAD"} {
+		s.Do(bitetest.Request{Method: m, Target: "/sse"})
+		s.Do(bitetest.Request{Method: m, Target: "/ev"})
+	}
+	s.WaitEnded()
+	if sse.Load() != 2 || ev.Load() != 2 {
+		t.Fatalf("Done of SSE %d, of Events %d; want 2 each", sse.Load(), ev.Load())
+	}
+}
+
+func TestAPanicInADoneIsRecoveredAndLoggedAndTheConnectionServesTheNextRequest(t *testing.T) {
+	s, lb := startLogged(t, func(a *bites.App) {
+		a.Get("/s", func(context.Context, Empty) (bites.Stream, error) {
+			return bites.Stream{Done: func() { panic("done boom") }, Func: func(_ context.Context, w *bites.StreamWriter) error {
+				_, err := w.WriteString("x")
+				return err
+			}}, nil
+		})
+	})
+	c := s.Dial("203.0.113.9:4000")
+	for range 2 {
+		c.Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n"))
+		if rp := s.Read(c, false); rp.Text() != "x" {
+			t.Fatalf("body %q", rp.Text())
+		}
+	}
+	s.WaitEnded()
+	if !strings.Contains(lb.String(), "panic in a stream's Done") {
+		t.Fatalf("no log of the panic:\n%s", lb.String())
+	}
+}
+
+func TestADoneOfALiveStreamRunsOnceWhenShutdownCutsIt(t *testing.T) {
+	var taken, done atomic.Int64
+	started := make(chan struct{})
+	s, app := startApp(t, func(a *bites.App) {
+		a.Get("/s", func(context.Context, Empty) (bites.Stream, error) {
+			taken.Add(1)
+			return bites.Stream{Live: true, Done: func() { done.Add(1) }, Func: func(ctx context.Context, w *bites.StreamWriter) error {
+				w.WriteString("x")
+				w.Flush()
+				close(started)
+				<-ctx.Done()
+				return ctx.Err()
+			}}, nil
+		})
+	})
+	c := s.Dial("203.0.113.9:4000")
+	c.Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n"))
+	<-started
+	if err := app.Shutdown(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	settled(t, s, &taken, &done)
+}
+
+func TestADoneOfAPlainStreamRunsOnceWhenShutdownDrainsIt(t *testing.T) {
+	var taken, done atomic.Int64
+	started, release := make(chan struct{}), make(chan struct{})
+	s, app := startApp(t, func(a *bites.App) {
+		a.Get("/s", func(context.Context, Empty) (bites.Stream, error) {
+			taken.Add(1)
+			return bites.Stream{Done: func() { done.Add(1) }, Func: func(_ context.Context, w *bites.StreamWriter) error {
+				w.WriteString("x")
+				w.Flush()
+				close(started)
+				<-release
+				_, err := w.WriteString("y")
+				return err
+			}}, nil
+		})
+	})
+	c := s.Dial("203.0.113.9:4000")
+	c.Write([]byte("GET /s HTTP/1.1\r\nHost: x\r\n\r\n"))
+	<-started
+	shut := make(chan error, 1)
+	go func() { shut <- app.Shutdown(context.Background()) }()
+	if done.Load() != 0 {
+		t.Fatal("Done ran while the stream was still being drained")
+	}
+	close(release)
+	if err := <-shut; err != nil {
+		t.Fatal(err)
+	}
+	settled(t, s, &taken, &done)
+}
+
+func TestADoneOfAStreamReturnedAsAnInterfaceRunsOnceWhenTheHandlerReturnsItWithAnError(t *testing.T) {
+	var done atomic.Int64
+	s := start(t, func(a *bites.App) {
+		a.Get("/s", func(context.Context, Empty) (any, error) {
+			return bites.Stream{Done: func() { done.Add(1) }}, errors.New("no")
+		}, bites.Returns[bites.Stream]())
+	})
+	get(t, s, "/s")
+	s.WaitEnded()
+	if done.Load() != 1 {
+		t.Fatalf("Done called %d times, want 1", done.Load())
+	}
+}

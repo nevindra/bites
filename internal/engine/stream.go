@@ -49,6 +49,24 @@ type StreamRunner interface {
 	Fail(ex *Exchange, err error)
 }
 
+// releaseStream calls run.Done, when the runner has one. Whoever takes a runner out of the
+// Response (runStream, dropStream) owns it, so Done runs once, whichever way the stream ends or is
+// dropped (ADR 0030).
+func releaseStream(run StreamRunner) {
+	if d, ok := run.(interface{ Done() }); ok {
+		d.Done()
+	}
+}
+
+// dropStream releases the stream the Response holds and forgets it: the answer was replaced
+// (Respond, a middleware's error) or the chain panicked, so the function will never run.
+func (r *Response) dropStream() {
+	if run := r.stream; run != nil {
+		r.stream, r.live, r.sized, r.length = nil, false, false, 0
+		releaseStream(run)
+	}
+}
+
 // Stream marks the response begun with Respond as a stream: its body is written by run after
 // Serve returns, with chunked transfer encoding (HTTP/1.1) or until the connection closes
 // (HTTP/1.0). live is the flag of ADR 0030: Shutdown cancels the context of a live stream with
@@ -346,6 +364,7 @@ func (c *conn) runStream(f *fault) (outcome int, panicked bool) {
 	run, live := r.stream, r.live
 	sized, length := r.sized, r.length
 	r.stream, r.live, r.sized = nil, false, false
+	defer releaseStream(run) // after the last byte, however the function ends, or in place of it
 	if r.status < 200 || r.status == 204 || r.status == 304 {
 		return streamFallback, false // such an answer has no body to stream
 	}

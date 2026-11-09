@@ -71,7 +71,40 @@ func fromFS(fsys fs.FS) func(context.Context, Download) (bites.File, error) {
 app.Get("/static/{name...}", fromFS(os.DirFS("public")))
 ```
 
-Exactly one of `Root` and `FS` must be set. Both or neither is a 500, logged, because it can only be a mistake in the handler.
+Exactly one of `Root`, `FS`, `Open` and `Content` must be set. None or several is a 500, logged, because it can only be a mistake in the handler.
+
+## Sending an object from a store, or bytes in memory
+
+**Give `Open` for an object in S3, GCS or a database, and `Content` for bytes you already hold.** Neither is a file system, so neither needs a fake one, and both get the ranges, validators, conditional requests, HEAD and `Attachment` of the other sources ([ADR 0064](../adr/0064-a-file-answers-its-own-conditional-and-range-requests.md)). `Open` is called only when a body is sent, with the request's context, which is cancelled when the client leaves: a viewer who closes a 2 GB video stops the read from the store, and the store call can carry the request's deadline and trace. `Size` and `ModTime` come from the row you already read, so a HEAD, a 304 and a 412 open nothing.
+
+<!-- compiles: decls -->
+```go
+type Object struct {
+	Name, Version string
+	Size          int64
+	Modified      time.Time
+}
+
+type Blobs interface {
+	Stat(ctx context.Context, id string) (Object, error)
+	Reader(ctx context.Context, id string) (io.ReadSeekCloser, error)
+}
+
+func fromStore(ctx context.Context, store Blobs, id string) (bites.File, error) {
+	obj, err := store.Stat(ctx, id) // size, modified, content type: no body read
+	if err != nil {
+		return bites.File{}, bites.NotFound("no such upload")
+	}
+	h := bites.Header{}
+	h.Set("ETag", `"`+obj.Version+`"`) // a zero ModTime gives no made ETag
+	return bites.File{
+		Name: obj.Name, Size: obj.Size, ModTime: obj.Modified, Header: h,
+		Open: func(ctx context.Context) (io.ReadSeekCloser, error) { return store.Reader(ctx, id) },
+	}, nil
+}
+```
+
+For bytes in memory, `bites.File{Content: snapshot, Name: "snapshot.json", ModTime: built}` is the whole answer. Do not change the slice until the answer is sent, and give `Content: []byte{}` (not nil) for an empty body. `Size` must be the length of what `Open` returns: a reader of another length is a 500 that names both numbers, found when the body is written (a HEAD cannot tell). `Name` is not looked up here; it only gives the content type through its extension and the saved name for `Attachment`.
 
 ## What a missing or forbidden name answers
 

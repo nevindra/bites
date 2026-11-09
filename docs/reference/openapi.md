@@ -65,6 +65,13 @@ What Registration refuses, as rows of the refusal table (after the route label, 
 | `ErrorStatuses` given one status twice | `GET /x: ErrorStatuses is given 404 twice` |
 | `ErrorStatuses` on an `Undocumented` route | `GET /x: ErrorStatuses states answers in the API document, which Undocumented leaves this route out of: give one or the other` |
 | `ErrorStatuses` on a static route | `Static /s: ErrorStatuses states answers in the API document, which leaves static files out: give it to the typed routes instead` |
+| `ErrorStatus` given a status outside 400 to 599 | `GET /x: ErrorStatus[StaleBlocks] is given 302, which is not an error status: give a status from 400 to 599 the handler returns` |
+| `ErrorStatus` given 400, 401 or 429 | `GET /x: ErrorStatus[StaleBlocks] is given 429, which the framework answers in a shape of its own (400 lists the Input's mistakes, 401 and 429 carry headers): use a status the handler decides, such as 409 or 422` |
+| `ErrorStatus` for a status the framework already answers on the route | `POST /x: ErrorStatus[StaleBlocks](413): the framework already answers 413 on this route with a shape of its own, so the document cannot state members for it: use a status the handler decides, such as 409 or 422` |
+| `ErrorStatus` given a type that is not a struct | `GET /x: ErrorStatus[string](409): the members of an error are the fields of a struct, so T must be a struct type, as ErrorStatus[StaleBlocks](409)` |
+| `ErrorStatus` given one status twice, on the route and its group | `GET /g/x: ErrorStatus is given 409 twice: state the members of a status once, on the route or on its group` |
+| `ErrorStatus` with a field written as a member of the problem | `GET /x: ErrorStatus[Clashing](409): a field of Clashing is written as "title", a member the problem body already has (type, title, status, detail, instance, errors, truncated, request_id): give the field another wire name with a json tag` |
+| `ErrorStatus` on an `Undocumented` route | `GET /x: ErrorStatus states answers in the API document, which Undocumented leaves this route out of: give one or the other` |
 | `MediaType` on a group | `group "/g": MediaType is given to a group, but the routes of a group send different types: give it to each route` |
 | a `MediaType` that is not a media type, or has a wildcard | `GET /x: MediaType "ndjson" is not a media type: give type/subtype, with no wildcard, as "application/x-ndjson" or "text/csv; charset=utf-8"` |
 | `MediaType` on a route with no `Bytes`, `File` or `Stream` answer | `GET /x: MediaType is given, but every answer of the handler has a media type the API document already states (JSON, text or an event stream): MediaType is for a Bytes, File or Stream answer` |
@@ -212,6 +219,28 @@ ErrorStatuses states the error statuses the route's handler, or its Providers, m
 app.Delete("/rooms/{id}", func(ctx context.Context, in struct{ Path struct{ ID int64 } }) (bites.NoContent, error) {
 	return bites.NoContent{}, bites.NotFound("no room with this id")
 }, bites.ErrorStatuses(404, 409))
+```
+
+### `ErrorStatus`
+
+```go
+func ErrorStatus[T any](status int) RouteOption
+```
+
+ErrorStatus states an error status the route's handler may return together with the type of the members its answer carries, so the document, and the client types generated from it, say what the problem body holds beyond the framework's own members. The response for that status is `application/problem+json` whose schema is `allOf` the problem's members (`title`, `status`, `detail`, `request_id`) and the schema of `T`, a named component with the wire names of its fields. The handler sends the data with [`WithMembers`](./errors.md#withmembers), which writes `T` with the response codec. `T` must be a struct. Given to a group, it covers every route of the group. It is the typed form of [`ErrorStatuses`](#errorstatuses) for one status, and replaces it for that status when both name it. It states and does not check: an error that carries members of a type the route does not state is still sent, and logged at `WARN` with the option to add. Refused, as the table above says: a status outside 400 to 599; 400, 401 and 429, which the framework answers in shapes of its own; a status the framework already answers on the route (413 and 415 on a route with a body); a `T` that is not a struct or cannot be written as JSON; a field of `T` written as `type`, `title`, `status`, `detail`, `instance`, `errors`, `truncated` or `request_id`; a status named twice on a route and its groups; and the option on an `Undocumented` or static route. Allocations: none per request; it is read once, when the document is built. Decision: [ADR 0088](../adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md).
+
+<!-- compiles: decls -->
+
+```go
+type StaleBlocks struct {
+	Conflicts []string
+}
+
+func registerOps(app *bites.App) {
+	app.Post("/docs/{id}/ops", func(ctx context.Context, in struct{ Path struct{ ID int64 } }) (bites.NoContent, error) {
+		return bites.NoContent{}, bites.WithMembers(bites.Conflict("stale batch"), StaleBlocks{Conflicts: []string{"b1"}})
+	}, bites.ErrorStatus[StaleBlocks](409))
+}
 ```
 
 ### `MediaType`

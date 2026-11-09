@@ -112,6 +112,10 @@ _Avoid_: infinite stream, long-poll
 A Body type whose handler reads a multipart/form-data request part by part while it arrives, never buffered whole. The route must state MaxBody. A Part, and the Upload it came from, work only while the handler runs.
 _Avoid_: multipart body, file upload handler
 
+**BodyReader**:
+A Body type whose handler reads the request body as an `io.Reader` while it arrives, never buffered whole, whatever its media type: Upload for a body that is not multipart. The route must state MaxBody. It works only while the handler runs.
+_Avoid_: body stream, streaming body
+
 **Part**:
 One part of an Upload: a name, a file name and a content type, all data the client sent and never paths, and a body read with `Read`. It stops working when the Upload moves to the next part.
 _Avoid_: file header
@@ -125,7 +129,7 @@ One file received by a Multipart body: its field name, the file name and content
 _Avoid_: file header, multipart.FileHeader, upload file
 
 **File**:
-An output type: a file sent with its length, its validators (ETag, Last-Modified) and one Range from an `os.Root` or an `fs.FS`, so its name cannot name anything outside the directory; it answers its own conditional requests.
+An output type: a file sent with its length, its validators (ETag, Last-Modified) and one Range from an `os.Root` or an `fs.FS` (so its name cannot name anything outside the directory), from an `Open` function that receives the request's context (a blob store), or from `Content` bytes in memory; it answers its own conditional requests.
 _Avoid_: static file handler, ServeFile
 
 **Static**:
@@ -149,7 +153,7 @@ A Registration mistake answered by a panic with an exact message naming the rout
 _Avoid_: validation error (that is a client's 400), startup check
 
 **Problem+json**:
-The shape of every error answer, `application/problem+json` with `title`, `status`, an optional `detail`, the request ID and, for a 400, `errors` ([ADR 0012](docs/adr/0012-client-errors-are-400-problem-json.md)).
+The shape of every error answer, `application/problem+json` with `title`, `status`, an optional `detail`, the request ID, for a 400 `errors`, and for an error that carries data the fields of a struct given with `WithMembers` ([ADR 0012](docs/adr/0012-client-errors-are-400-problem-json.md), [ADR 0088](docs/adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md)).
 _Avoid_: error envelope, error JSON
 
 **Rule code**:
@@ -275,6 +279,10 @@ _Avoid_: default tag, `Default()` on a type, `Or(50)` in the handler for a docum
 **OneOf**:
 The return type of a handler with more than one answer, `OneOf2[A, B]` to `OneOf4[A, B, C, D]`: it holds one of its type arguments, chosen with the method of that variant's letter (`Answer{}.B(v)`), each compiled at Registration as if the handler returned it alone ([ADR 0013](docs/adr/0013-other-statuses-are-wrapper-types.md)).
 _Avoid_: Either, union (a JSON value of several kinds is a Tagged union), variant type (a variant is one of its type arguments)
+
+**RawJSON**:
+A member whose JSON the application owns and does not decode: `RawJSON[T]` holds the bytes exactly as sent in its one field `JSON` (`null` included, and an empty one is written as `null`) and the API document describes it as `T`, nullable, with `T` never checked against the bytes ([ADR 0087](docs/adr/0087-a-json-value-the-app-owns-is-raw-json-bytes-documented-as-a-type.md)). It is a member, where `Raw[T]` is a request Body that decodes `T` and keeps the bytes beside it.
+_Avoid_: raw message with a schema, schema hint, typed RawMessage
 
 **Tagged union**:
 A struct whose `Discriminator() string` method names the member that carries its tag, and whose every field is an `Opt` of a struct, one **variant**, tagged by the field's wire name: a JSON value of several kinds, such as a WebSocket protocol's frames, with exactly one variant set ([ADR 0083](docs/adr/0083-a-json-value-of-several-kinds-is-a-tagged-union-of-opt-variants.md)).

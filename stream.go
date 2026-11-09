@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,7 +52,7 @@ var ErrStreamClosed = engine.ErrStreamClosed
 //
 // The body is chunked on HTTP/1.1; an HTTP/1.0 client gets no chunking and the body ends when the
 // connection closes, with Connection: close. A HEAD request gets the head and no body, and Func
-// does not run. Middleware sees a Stream as a Response with Streaming() true and Size() 0.
+// does not run, but Done does. Middleware sees a Stream as a Response with Streaming() true and Size() 0.
 //
 // Status is 200 when zero and must be a status that has a body: 1xx, 204 and 304 are a 500. A
 // Func that is nil is a 500, logged. A Content-Type in Header is used; without one the stream is
@@ -78,6 +80,18 @@ type Stream struct {
 	Live bool
 	// Func writes the body; it runs after the handler and its middleware return, and a nil Func is a 500.
 	Func func(ctx context.Context, w *StreamWriter) error
+	// Done, when it is not nil, is called exactly once when the response is over, whichever way it
+	// ends: after Func has returned (cleanly, with an error, by a panic, because the client left or
+	// Shutdown cut it), in place of Func when Func will never run (a HEAD request, a nil Func, a
+	// status that has no body, a middleware that replaced the answer or failed, a panic after the
+	// handler returned), and when the handler returned the Stream together with an error. It is the
+	// place to give back what the handler took before it returned, such as a per-user turn or a
+	// semaphore slot: take it in the handler, so a refusal is an ordinary answer before any byte,
+	// and release it here. It runs on the connection's goroutine after the last byte is written
+	// (or the write failed), never concurrently with Func, and receives nothing; a panic in it is
+	// recovered and logged. Done runs only once the Stream has been returned: a handler that takes
+	// something and then returns an error alone releases it itself. Nil does nothing.
+	Done func()
 }
 
 // SSE is a Server-Sent Events response (ADR 0030): a Stream, live by construction, with the
@@ -90,6 +104,8 @@ type SSE struct {
 	Cookies []Cookie
 	// Func writes the events; returning ends the stream.
 	Func func(ctx context.Context, e EventWriter) error
+	// Done is called exactly once when the response is over, whichever way, as Stream.Done.
+	Done func()
 }
 
 // Event is one Server-Sent Event. Data may hold line breaks: each line is sent as its own data
@@ -215,6 +231,8 @@ type Events[T any] struct {
 	Cookies []Cookie
 	// Func sends the values; returning ends the stream, and a nil Func is a 500, logged.
 	Func func(ctx context.Context, e EventSender[T]) error
+	// Done is called exactly once when the response is over, whichever way, as Stream.Done.
+	Done func()
 }
 
 // EventSender sends the events of an Events response. It is valid only while the Events function
@@ -308,30 +326,33 @@ func (s *eventScratch) send(w *StreamWriter, id, name string, retry time.Duratio
 // zero Events[T] boxed once at Registration answers for every response of the route.
 type eventsType interface {
 	eventType() reflect.Type
-	newRun(a *App, ctx context.Context, src unsafe.Pointer, enc *jsoncodec.Encoder) engine.StreamRunner
+	newRun(a *App, ctx context.Context, src unsafe.Pointer, enc *jsoncodec.Encoder, done func()) engine.StreamRunner
 }
 
 func (Events[T]) eventType() reflect.Type { return reflect.TypeFor[T]() }
 
 // newRun builds the runner of the Events at src, nil when its Func is nil. The runner is the one
 // allocation the stream makes beyond a request's own and the writer, as streamRun is for an SSE.
-func (Events[T]) newRun(a *App, ctx context.Context, src unsafe.Pointer, enc *jsoncodec.Encoder) engine.StreamRunner {
+func (Events[T]) newRun(a *App, ctx context.Context, src unsafe.Pointer, enc *jsoncodec.Encoder, done func()) engine.StreamRunner {
 	fn := (*Events[T])(src).Func
 	if fn == nil {
 		return nil
 	}
-	r := &eventsRun[T]{a: a, ctx: ctx, fn: fn}
+	r := &eventsRun[T]{a: a, ctx: ctx, fn: fn, done: done}
 	r.s.enc = enc
 	r.s.buf = r.s.arr[:0]
 	return r
 }
 
 type eventsRun[T any] struct {
-	a   *App
-	ctx context.Context
-	fn  func(context.Context, EventSender[T]) error
-	s   eventScratch
+	a    *App
+	ctx  context.Context
+	fn   func(context.Context, EventSender[T]) error
+	done func()
+	s    eventScratch
 }
+
+func (r *eventsRun[T]) Done() { callDone(r.a, r.done) }
 
 func (r *eventsRun[T]) Run(w *StreamWriter) error {
 	return r.fn(r.ctx, EventSender[T]{w: w, s: &r.s})
@@ -401,11 +422,14 @@ func (a *App) compileEvents(p *outPlan, t reflect.Type) error {
 // streamRun is what the engine runs after the handler and the middleware have returned. It is the
 // one allocation a stream makes beyond a request's own, besides the writer.
 type streamRun struct {
-	a   *App
-	ctx context.Context
-	fn  func(context.Context, *StreamWriter) error
-	sse func(context.Context, EventWriter) error
+	a    *App
+	ctx  context.Context
+	fn   func(context.Context, *StreamWriter) error
+	sse  func(context.Context, EventWriter) error
+	done func()
 }
+
+func (s *streamRun) Done() { callDone(s.a, s.done) }
 
 func (s *streamRun) Run(w *StreamWriter) error {
 	if s.sse != nil {
@@ -424,41 +448,48 @@ func (s *streamRun) Fail(ex *engine.Exchange, err error) { s.a.answerError(ex, e
 func (p *outPlan) writeStream(a *App, ex *engine.Exchange, src unsafe.Pointer, ctx context.Context) {
 	status := 200
 	sse := p.wk >= wrapSSE // an SSE or an Events
+	done := *(*func())(unsafe.Add(src, p.doneOff))
+	// Until ex.Stream hands the runner to the engine, which then owns Done, a mistake here ends
+	// the stream before it began: Done is called and the answer is the 500.
+	fail := func(err error) {
+		callDone(a, done)
+		a.internalError(ex, err)
+	}
 	var run engine.StreamRunner
 	switch p.wk {
 	case wrapEvents:
-		if run = p.events.newRun(a, ctx, src, p.enc); run == nil {
-			a.internalError(ex, refusalf("an Events has no Func"))
+		if run = p.events.newRun(a, ctx, src, p.enc, done); run == nil {
+			fail(refusalf("an Events has no Func"))
 			return
 		}
 	case wrapSSE:
-		r := &streamRun{a: a, ctx: ctx}
+		r := &streamRun{a: a, ctx: ctx, done: done}
 		r.sse = *(*func(context.Context, EventWriter) error)(unsafe.Add(src, p.funcOff))
 		if r.sse == nil {
-			a.internalError(ex, refusalf("an SSE has no Func"))
+			fail(refusalf("an SSE has no Func"))
 			return
 		}
 		run = r
 	default:
-		r := &streamRun{a: a, ctx: ctx}
+		r := &streamRun{a: a, ctx: ctx, done: done}
 		r.fn = *(*func(context.Context, *StreamWriter) error)(unsafe.Add(src, p.funcOff))
 		run = r
 		if r.fn == nil {
-			a.internalError(ex, refusalf("a Stream has no Func"))
+			fail(refusalf("a Stream has no Func"))
 			return
 		}
 		if st := *(*int)(unsafe.Add(src, p.statOff)); st != 0 {
 			status = st
 		}
 		if status < 200 || status > 599 || status == 204 || status == 304 {
-			a.internalError(ex, refusalf("a Stream has status %d; it must be a status that has a body, 200 to 599 except 204 and 304", status))
+			fail(refusalf("a Stream has status %d; it must be a status that has a body, 200 to 599 except 204 and 304", status))
 			return
 		}
 	}
 	r := ex.Respond(status)
 	needType := true
 	if err := writeHeaders(r, *(*Header)(unsafe.Add(src, p.hdrOff)), &needType); err != nil {
-		a.internalError(ex, err)
+		fail(err)
 		return
 	}
 	if p.hasAtt {
@@ -477,13 +508,75 @@ func (p *outPlan) writeStream(a *App, ex *engine.Exchange, src unsafe.Pointer, c
 	for _, c := range *(*[]Cookie)(unsafe.Add(src, p.cookOff)) {
 		v, err := appendSetCookie(nil, &c)
 		if err != nil {
-			a.internalError(ex, err)
+			fail(err)
 			return
 		}
 		r.Header("Set-Cookie", string(v))
 	}
 	live := sse || *(*bool)(unsafe.Add(src, p.liveOff))
 	ex.Stream(live, run)
+}
+
+// callDone calls a stream's Done, when it has one. A panic in it is recovered and logged, because
+// Done runs on the connection's goroutine after the response and a panic there has nobody to answer.
+func callDone(a *App, done func()) {
+	if done == nil {
+		return
+	}
+	defer func() {
+		if v := recover(); v != nil {
+			a.log.Error("panic in a stream's Done", "panic", v, "stack", string(debug.Stack()))
+		}
+	}()
+	done()
+}
+
+// discardStream calls Done of the stream at src, a *T of the type the plan was compiled for, when
+// the handler returned it together with an error: the error is the answer and the stream is
+// dropped, so its Done is the only place left to give back what the handler took. A plan that is
+// not a stream, or a OneOf that holds none, does nothing.
+func (p *outPlan) discardStream(a *App, src unsafe.Pointer) {
+	if p.alts != nil {
+		if w := *(*uint8)(src); w != 0 && int(w) <= len(p.alts) {
+			al := &p.alts[w-1]
+			al.plan.discardStream(a, unsafe.Add(src, al.off))
+		}
+		return
+	}
+	if p.wk >= wrapStream {
+		callDone(a, *(*func())(unsafe.Add(src, p.doneOff)))
+	}
+}
+
+// discardDynamic is discardStream for a value returned as an interface, found by its type as
+// writeDynamic does.
+func (p *outPlan) discardDynamic(a *App, v any) {
+	if v == nil {
+		return
+	}
+	t := reflect.TypeOf(v)
+	data := (*[2]unsafe.Pointer)(unsafe.Pointer(&v))[1]
+	for i := range p.variants {
+		vr := &p.variants[i]
+		switch t {
+		case vr.t:
+			if vr.indirect {
+				vr.plan.discardStream(a, data)
+			} else {
+				c := reflect.New(t)
+				c.Elem().Set(reflect.ValueOf(v))
+				vr.plan.discardStream(a, c.UnsafePointer())
+			}
+		case vr.ptr:
+			if data != nil {
+				vr.plan.discardStream(a, data)
+			}
+		default:
+			continue
+		}
+		runtime.KeepAlive(v)
+		return
+	}
 }
 
 func hasHeader(h Header, name string) bool {

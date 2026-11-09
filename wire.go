@@ -59,6 +59,8 @@ func (r *wireRoute) rows(tw *tabwriter.Writer, opts jsoncodec.Options) error {
 		switch b.kind {
 		case bodyBytes:
 			fmt.Fprintf(tw, "  body\t%s.Body\t(raw bytes)\t[]byte\n", label)
+		case bodyReader:
+			fmt.Fprintf(tw, "  body\t%s.Body\t(raw stream)\tBodyReader\n", label)
 		case bodyUpload:
 			fmt.Fprintf(tw, "  body\t%s.Body\t(multipart parts)\tUpload\n", label)
 		case bodyForm, bodyMultipart:
@@ -148,7 +150,7 @@ func walkWire(tw *tabwriter.Writer, section, goPath, wirePath string, t reflect.
 		return err
 	}
 	switch sh.Kind {
-	case jsoncodec.KindOpt, jsoncodec.KindNull, jsoncodec.KindPtr:
+	case jsoncodec.KindOpt, jsoncodec.KindNull, jsoncodec.KindPtr, jsoncodec.KindRaw:
 		return walkWire(tw, section, goPath, wirePath, sh.Elem, o, dir, stack)
 	case jsoncodec.KindSlice, jsoncodec.KindArray:
 		if wirePath == "" {
@@ -204,7 +206,7 @@ func descend(tw *tabwriter.Writer, section, goPath, wirePath string, t reflect.T
 		return err
 	}
 	switch sh.Kind {
-	case jsoncodec.KindOpt, jsoncodec.KindNull, jsoncodec.KindPtr:
+	case jsoncodec.KindOpt, jsoncodec.KindNull, jsoncodec.KindPtr, jsoncodec.KindRaw:
 		return descend(tw, section, goPath, wirePath, sh.Elem, o, dir, stack)
 	case jsoncodec.KindSlice, jsoncodec.KindArray:
 		return descend(tw, section, goPath+"[]", wirePath+"[]", sh.Elem, o, dir, stack)

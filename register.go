@@ -48,6 +48,7 @@ type routeConfig struct {
 	undocumented   bool           // Undocumented: the route is left out of the API document (ADR 0069)
 	deprecated     bool           // Deprecated: the operation is marked deprecated, and RouteInfo says so
 	errorStatuses  []int          // ErrorStatuses: the error statuses the handler returns, for the API document
+	typedErrors    []typedError   // ErrorStatus: the error statuses with the type of their members, for the API document
 	mediaType      string         // MediaType: the media type of a Bytes, File or Stream answer, for the API document
 	sendsHeaders   []sentHeader   // SendsHeader: the headers a success answer carries, for the API document
 	bad            string         // the first option whose value cannot work, as a sentence; empty when none
@@ -59,6 +60,8 @@ func (c *routeConfig) answerOption() string {
 	switch {
 	case len(c.errorStatuses) > 0:
 		return "ErrorStatuses"
+	case len(c.typedErrors) > 0:
+		return "ErrorStatus"
 	case c.mediaType != "":
 		return "MediaType"
 	case len(c.sendsHeaders) > 0:
@@ -635,8 +638,13 @@ func register[In, Out any](a *App, prefix, method, pattern string, h func(contex
 	if err != nil {
 		fail(err)
 	}
-	if in.body != nil && (in.body.kind == bodyUpload || in.body.kind == bodyMultipart) {
-		a.planUpload(label, &cfg, in.body.kind == bodyMultipart)
+	if in.body != nil {
+		switch in.body.kind {
+		case bodyUpload, bodyMultipart, bodyReader:
+			a.planUpload(label, &cfg, in.body.kind == bodyMultipart)
+		default:
+			a.planBody(label, &cfg)
+		}
 	}
 	outT := reflect.TypeFor[Out]()
 	var out *outPlan
@@ -739,6 +747,12 @@ func (rt *typedRoute[In, Out]) call(a *App, ex *engine.Exchange, ctx context.Con
 	}
 	out, err := rt.h(ctx, in)
 	if err != nil {
+		// A stream returned with the error is dropped; its Done still runs (ADR 0030).
+		if rt.out.dynamic {
+			rt.out.discardDynamic(a, any(out))
+		} else if rt.out.wk >= wrapStream || rt.out.alts != nil {
+			rt.out.discardStream(a, noescapeP(unsafe.Pointer(&out)))
+		}
 		a.answerError(ex, err)
 		return
 	}

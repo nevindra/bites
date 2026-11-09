@@ -27,7 +27,7 @@ func newApp() *bites.App {
 | `MaxFields` | 100 | more header fields are a 431; more fields of a `Form` body are a 413 |
 | `MaxBody` | 1 MiB, per route | a 413 |
 | `HeadTimeout` | 10 s | the connection is closed |
-| `BodyTimeout` | 30 s, per route | a 408 |
+| `BodyTimeout` | 30 s, per route (longer for a `MaxBody` over 3.75 MiB) | a 408 |
 | `IdleTimeout` | 60 s | the idle keep-alive connection is closed |
 | `WriteTimeout` | 30 s | the connection is closed |
 | `MaxConns` | 90% of the file descriptor limit | the connection is not accepted |
@@ -79,7 +79,9 @@ bulk.Post("/small", importUsers, bites.MaxBody(1<<10))
 
 [`MaxBody(n)`](../reference/input.md#maxbody) is the most bytes of request body the route reads, and [`BodyTimeout(d)`](../reference/input.md#bodytimeout) is how long it waits for the body. Both must be positive; `MaxBody(0)` or a nil option is refused when the group or route is made, naming where, even if the group has no route yet ([ADR 0007](../adr/0007-mistakes-are-refused-at-registration.md)).
 
-**An upload route sets its own limits.** A route whose Body is an `Upload` has no default `MaxBody`: how much it may receive is the application's decision, so a route without one is refused at Registration. Its body timeout is derived from the size, `max(30 s, MaxBody / 128 KiB/s)`, and logged as `default`. Two more options bound it, and both are explained in [forms and uploads](./forms-and-uploads.md):
+**A route with a large `MaxBody` gets a longer body timeout.** When neither the route, a group nor `WithLimits` gave a `BodyTimeout`, the route's is `max(30 s, MaxBody / 128 KiB/s)`: a route with `MaxBody(8<<20)` waits 64 s, because 30 s would need 2.2 Mbit/s and a slower link would get a 408 on every request. At or below 3.75 MiB it stays 30 s. The start-up log lists each route it moved (`route PUT /parts: body timeout, derived from max body bytes`); a `BodyTimeout` you give is used as it is ([ADR 0044](../adr/0044-the-body-type-decides-how-a-body-is-read.md)).
+
+**An upload route sets its own limits.** A route whose Body is an `Upload` or a `BodyReader` has no default `MaxBody`: how much it may receive is the application's decision, so a route without one is refused at Registration. Its body timeout is derived from the size, `max(30 s, MaxBody / 128 KiB/s)`, and logged as `default`. Two more options bound it, and both are explained in [forms and uploads](./forms-and-uploads.md):
 
 - [`MaxParts(n)`](../reference/input.md#maxparts) is the most parts of one upload, 128 by default; more is a 413.
 - [`MaxInFlight(n)`](../reference/input.md#maxinflight) bounds the uploads of the route running at once. It has no default, because one would turn away real traffic, and the start-up log says `unlimited` for a route without it.

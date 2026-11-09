@@ -132,6 +132,31 @@ The other sections are decoded and `Validate` runs before the handler, and the b
 
 `Upload` is the whole `Body`: it cannot be a field of a JSON body, a list, or a text section. `Name`, `FileName` and `ContentType` are data the client sent. `FileName` may be `../../etc/passwd`; the framework never opens it, and a handler that joins it to a directory has chosen to trust the client (open files through an `os.Root`, which refuses to leave its directory).
 
+## Receiving a raw body as it arrives
+
+**A `Body` of type [`BodyReader`](../reference/input.md#bodyreader) is the request body, whatever its media type, as an `io.Reader` the handler reads while it arrives.** It is for what is sent as the raw body of a `PUT` or `PATCH`: a chunk of a resumable upload, or a file sent as it is. A `[]byte` Body would hold the whole body in memory first; a `BodyReader` holds only what the handler's own buffer holds ([ADR 0044](../adr/0044-the-body-type-decides-how-a-body-is-read.md)).
+
+<!-- compiles: decls -->
+```go
+type PutPart struct {
+	Path   struct{ ID string }
+	Header struct {
+		ContentType string `wire:"Content-Type"`
+	}
+	Body bites.BodyReader
+}
+
+// store stands for your storage: a file, an object store writer.
+func putPart(store func(id string) io.Writer) func(context.Context, PutPart) (bites.NoContent, error) {
+	return func(ctx context.Context, in PutPart) (bites.NoContent, error) {
+		_, err := io.Copy(store(in.Path.ID), in.Body)
+		return bites.NoContent{}, err // a status error from the body (400, 408, 413) is already the answer
+	}
+}
+```
+
+It has the rules of an `Upload`: the route must state `MaxBody` (refused at Registration without), `BodyTimeout` defaults to the larger of 30 s and `MaxBody` at 128 KiB/s and covers the whole body from the first `Read`, `MaxInFlight` bounds the bodies in flight, and `Read` returns a [`StatusError`](../reference/errors.md#statuserror) for a body that is too large (413), too slow (408) or cut short (400), so returning it answers correctly and the connection is closed after the answer. A `BodyReader` is valid only while the handler runs: after it returns, `Read` fails with `ErrUploadClosed`. The media type is not checked; a handler that wants `application/pdf` reads the `Header` section.
+
 ## Receiving a form with its files
 
 **A `Body` of type [`Multipart[T]`](../reference/input.md#multipart) is a `multipart/form-data` request decoded into a struct before the handler runs.** Ask one question to choose between it and an `Upload`: does the handler need the bytes while they arrive? If it streams a file to a store, checks a signature on the way, or takes a file larger than it can keep, the body is an `Upload`. If it wants the fields and the files together as values (a title and a photo, a CSV and its options), the body is a `Multipart[T]` ([ADR 0044](../adr/0044-the-body-type-decides-how-a-body-is-read.md)).
@@ -231,13 +256,14 @@ POST /up: Up.Body is an Upload, but the route has no MaxBody: how much a route m
 - an `Upload` route with no `MaxBody`, on the route or a group;
 - an `Upload` on a `GET`, `HEAD` or `DELETE` route;
 - an `Upload` held by a JSON body, a list, or a text section;
+- a `BodyReader` with no `MaxBody`, on a `GET`, `HEAD` or `DELETE` route, or held by a JSON body or a list;
 - a `Multipart` with no `MaxBody`, on a `GET` route, of a type that is not a struct, held by a JSON body or a list, or beside an `Upload` in one Input;
 - a `FormFile` in a `Form`, a Query, a Header, a Path, a Cookie or a JSON body, a file field that is a pointer, a map, an array, a `[]byte`, a `*multipart.FileHeader` or an `io.Reader`, an `Accept` entry that is not a media type, and a `MaxSize` under 1 or over `MaxBody`;
 - a `Limits.UploadMemory`, `MaxFieldBytes` or `MaxFormBytes` below zero, and a `Limits.UploadDir` that does not exist or cannot be written;
 - `MaxInFlight` or `MaxParts` with 0 or a negative number;
 - a `Form` on a `GET`, a pointer to a `Form`, and a `Null` field in a `Form`.
 
-A `MaxInFlight` on a route with no `Upload` is not refused, since a group's option reaches routes of every kind.
+A `MaxInFlight` on a route with no `Upload` or `BodyReader` is not refused, since a group's option reaches routes of every kind.
 
 ## Where to go next
 

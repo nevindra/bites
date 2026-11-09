@@ -133,7 +133,7 @@ A value converts back to a plain Go value where you need one: `string(in.Body.Na
 | a slice | the repeated key, one element each |
 | a `CSV[T]` | one value split at commas, in a Query or a Header: `?stage=won,lost` |
 
-**`uuid.UUID` means the standard library's.** Go 1.27 has a `uuid` package of its own, and the framework knows that type and no other: `import "uuid"`, then `ID uuid.UUID` in a Path, a Query or a Body. A uuid type from a module, such as `github.com/google/uuid`'s, is a `TextUnmarshaler` like any other: it decodes, but it answers `expected a valid value` and the API document calls it a plain string. Tell the app what it is once, with [`WithTextFormat`](../reference/app.md#withtextformat), and it gets the sentence `expected a UUID` and `format: uuid` everywhere, in requests and in responses:
+**`uuid.UUID` means the standard library's.** Go 1.27 has a `uuid` package of its own, and the framework knows that type and no other: `import "uuid"`, then `ID uuid.UUID` in a Path, a Query or a Body. A uuid type from a module, such as `github.com/google/uuid`'s, is a `TextUnmarshaler` like any other: it decodes, but it answers `expected a valid value of type uuid.UUID`, naming the Go type but not a format, and the API document calls it a plain string. Tell the app what it is once, with [`WithTextFormat`](../reference/app.md#withtextformat), and it gets the sentence `expected a UUID` and `format: uuid` everywhere, in requests and in responses:
 
 ```go
 import guuid "github.com/google/uuid"
@@ -250,7 +250,7 @@ func newApp() *bites.App {
 }
 ```
 
-A `json.RawMessage` field is free-form by name and needs nothing. A type with only a text form is a string already, and takes [`WithTextFormat`](../reference/app.md#withtextformat) when it needs a format.
+A `json.RawMessage` field is free-form by name and needs nothing. A type with only a text form is a string already, and takes [`WithTextFormat`](../reference/app.md#withtextformat) when it needs a format. A member that is "any JSON" accepts `null` as the bytes `null`; one whose shape the document should state, though the app does not decode it, is a [`RawJSON[T]`](../reference/input.md#rawjson) ([ADR 0087](../adr/0087-a-json-value-the-app-owns-is-raw-json-bytes-documented-as-a-type.md)).
 
 ## A body that may be absent
 

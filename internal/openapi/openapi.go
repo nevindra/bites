@@ -257,6 +257,13 @@ func (g *gen) schema(t reflect.Type) (Schema, error) {
 			return inner, nil
 		}
 		return nullable(inner), nil
+	case jsoncodec.KindRaw:
+		// Any JSON, null included, that the app says has the shape of Elem (ADR 0084).
+		inner, err := g.schema(sh.Elem)
+		if err != nil {
+			return nil, err
+		}
+		return nullable(inner), nil
 	case jsoncodec.KindStruct, jsoncodec.KindEnum, jsoncodec.KindUnion:
 		if !named {
 			return g.build(t, sh)
@@ -631,6 +638,11 @@ func nullable(s Schema) Schema {
 	}
 	if ts, ok := s["type"].([]any); ok && slices.Contains(ts, any("null")) {
 		return s // a declared type that already admits null (ADR 0076)
+	}
+	if alts, ok := s["anyOf"].([]any); ok && len(alts) == 2 {
+		if n, ok := alts[1].(Schema); ok && len(n) == 1 && n["type"] == "null" {
+			return s // already nullable
+		}
 	}
 	typ, ok := s["type"].(string)
 	if !ok {

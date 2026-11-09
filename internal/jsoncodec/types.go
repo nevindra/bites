@@ -113,7 +113,7 @@ func valuesOf(t reflect.Type) (vals []string, has bool, err error) {
 // beside a JSON one, and is neither registered nor one of the two types that mean free-form
 // JSON by name. A text-only type is a string and is not this case (ADR 0076).
 func (o Options) opaque(t reflect.Type, dir Direction) bool {
-	if t == rawMessageType || t == jsontextValue || o.Undescribed {
+	if t == rawMessageType || t == jsontextValue || o.Undescribed || isRawJSON(t) {
 		return false
 	}
 	if _, ok := o.JSONSchemas[t]; ok {
@@ -139,4 +139,28 @@ func OwnJSON(t reflect.Type) bool {
 	p := reflect.PointerTo(t)
 	return p.Implements(jsonUnmarshalerType) || p.Implements(fromUnmarshalerType) ||
 		p.Implements(jsonMarshalerType) || p.Implements(toMarshalerType)
+}
+
+func isRawJSON(t reflect.Type) bool {
+	_, ok := wire.RawJSONOf(t)
+	return ok
+}
+
+// checkRawJSON refuses a RawJSON whose T cannot be described: the document would say less than
+// the author meant. T is then compiled in the direction of the plan, so it is refused for the
+// same reasons as a field of that type.
+func checkRawJSON(t reflect.Type, path string) error {
+	elem, ok := wire.RawJSONOf(t)
+	if !ok {
+		return nil
+	}
+	switch {
+	case elem.Kind() == reflect.Interface:
+		return refusal(path, "%s names no shape: an interface has none, so use json.RawMessage for any JSON", wire.PublicName(t))
+	case elem.Kind() == reflect.Pointer:
+		return refusal(path, "%s: null is already accepted, so name the type itself, RawJSON[%s]", wire.PublicName(t), wire.PublicName(elem.Elem()))
+	case elem == rawMessageType || elem == jsontextValue || isRawJSON(elem):
+		return refusal(path, "%s: T is itself free-form JSON; use json.RawMessage, or name the shape the value has", wire.PublicName(t))
+	}
+	return nil
 }

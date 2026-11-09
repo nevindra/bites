@@ -6,7 +6,7 @@
 
 ## The shape of every error answer
 
-**Every error the framework writes has a `title` and a `status`, and may have a `detail`, an `errors` list, your own members and a `request_id`.** A client parses one shape for 400, 404, 405, 413, 415, 431, 500 and 503 alike ([ADR 0012](../adr/0012-client-errors-are-400-problem-json.md)). The body carries no stack, no Go type name and no text from a wrapped error.
+**Every error the framework writes has a `title` and a `status`, and may have a `detail`, an `errors` list, your own members and a `request_id`.** A client parses one shape for 400, 404, 405, 413, 415, 431, 500 and 503 alike ([ADR 0012](../adr/0012-client-errors-are-400-problem-json.md)). The body carries no stack and no text from a wrapped error; the one Go type name it may carry is the type a text value was expected to be, in `expected a valid value of type uuid.UUID`, so a client knows which text form to send.
 
 ```http
 GET /nope HTTP/1.1
@@ -57,7 +57,7 @@ Two answers are not 400, because the request's form is wrong rather than its con
 
 ## Answering with a status
 
-**Return a [`StatusError`](../reference/errors.md#statuserror) to answer with a status and a message of your choosing.** The constructors cover the common statuses: [`BadRequest`](../reference/errors.md#badrequest) (400), [`Unauthorized`](../reference/errors.md#unauthorized) (401), [`Forbidden`](../reference/errors.md#forbidden) (403), [`NotFound`](../reference/errors.md#notfound) (404), [`Conflict`](../reference/errors.md#conflict) (409), [`PreconditionFailed`](../reference/errors.md#preconditionfailed) (412), [`PreconditionRequired`](../reference/errors.md#preconditionrequired) (428), [`UnprocessableEntity`](../reference/errors.md#unprocessableentity) (422), [`TooManyRequests`](../reference/errors.md#toomanyrequests) (429) and [`ServiceUnavailable`](../reference/errors.md#serviceunavailable) (503). [`NewError`](../reference/errors.md#newerror) takes any status from 400 to 599, and its `title` is the status's registered reason phrase (`NewError(423, ...)` is `Locked`), or `Status N` for a status with none; any other status is answered as a 500 and logged, because it can only be a mistake. The message becomes `detail`.
+**Return a [`StatusError`](../reference/errors.md#statuserror) to answer with a status and a message of your choosing.** The constructors cover the common statuses: [`BadRequest`](../reference/errors.md#badrequest) (400), [`Unauthorized`](../reference/errors.md#unauthorized) (401), [`Forbidden`](../reference/errors.md#forbidden) (403), [`NotFound`](../reference/errors.md#notfound) (404), [`Gone`](../reference/errors.md#gone) (410, a one-time or expiring link that was used or ran out, where `NotFound` would suggest a wrong address), [`Conflict`](../reference/errors.md#conflict) (409), [`PreconditionFailed`](../reference/errors.md#preconditionfailed) (412), [`PreconditionRequired`](../reference/errors.md#preconditionrequired) (428), [`UnprocessableEntity`](../reference/errors.md#unprocessableentity) (422), [`TooManyRequests`](../reference/errors.md#toomanyrequests) (429) and [`ServiceUnavailable`](../reference/errors.md#serviceunavailable) (503). [`NewError`](../reference/errors.md#newerror) takes any status from 400 to 599, and its `title` is the status's registered reason phrase (`NewError(423, ...)` is `Locked`), or `Status N` for a status with none; any other status is answered as a 500 and logged, because it can only be a mistake. The message becomes `detail`.
 
 <!-- compiles: decls -->
 ```go
@@ -98,7 +98,7 @@ The framework answers input mistakes with 400, never 422; [`UnprocessableEntity`
 
 ## Adding members to the problem
 
-**[`StatusError.With`](../reference/errors.md#statuserrorwith) returns a copy that carries one more problem+json member, such as a machine-readable code.** The members `title`, `status` and `detail` belong to the framework and are ignored ([ADR 0049](../adr/0049-errors-are-found-with-errors-as-and-timeouts-wait.md)).
+**[`StatusError.With`](../reference/errors.md#statuserrorwith) returns a copy that carries one more problem+json member, such as a machine-readable code.** The members `title`, `status`, `detail` and `request_id` belong to the framework: one of those names is left out and logged ([ADR 0049](../adr/0049-errors-are-found-with-errors-as-and-timeouts-wait.md)). The value is written by the same codec as every response, so a struct in it has its wire names. `With` is for a small member a client may read as a code; the document does not describe it.
 
 <!-- compiles: decls -->
 ```go
@@ -118,6 +118,39 @@ Content-Type: application/problem+json
 
 {"title":"Conflict","status":409,"detail":"this order is already paid","code":"order_paid","retryable":false}
 ```
+
+## Data the client reads
+
+**When the client needs data to recover, send it as a struct with [`WithMembers`](../reference/errors.md#withmembers) and state the type with [`ErrorStatus[T]`](../reference/openapi.md#errorstatus).** A stale batch of edits answers 409 with the blocks as they are now, so the editor rebases without another request. The fields of the struct become members of the problem, written with wire names and `Opt` as in any answer, and the API document, and the client types generated from it, say what they are ([ADR 0088](../adr/0088-an-error-that-carries-data-states-its-type-with-error-status-and-sends-it-with-members.md)):
+
+<!-- compiles: decls -->
+```go
+type Conflict struct {
+	ID     string
+	Reason string
+}
+
+type StaleBatch struct {
+	Conflicts []Conflict
+}
+
+func registerOps(app *bites.App) {
+	app.Post("/docs/{id}/ops", func(ctx context.Context, in struct{ Path struct{ ID int64 } }) (bites.NoContent, error) {
+		return bites.NoContent{}, bites.WithMembers(bites.Conflict("the batch is stale"), StaleBatch{
+			Conflicts: []Conflict{{ID: "b1", Reason: "version"}},
+		})
+	}, bites.ErrorStatus[StaleBatch](409))
+}
+```
+
+```http
+HTTP/1.1 409 Conflict
+Content-Type: application/problem+json
+
+{"title":"Conflict","status":409,"detail":"the batch is stale","conflicts":[{"id":"b1","reason":"version"}]}
+```
+
+A field of the struct that is written as `type`, `title`, `status`, `detail`, `instance`, `errors`, `truncated` or `request_id` is refused at Registration; give it another wire name with a `json` tag. The option states and does not check: an error that carries members of a type the route does not state is still sent, and logged at `WARN` naming the option to add. `400`, `401` and `429` have shapes of their own and cannot carry a type.
 
 ## Wrapping errors and finding the status
 

@@ -97,6 +97,7 @@ func docApp(app *bites.App) {
 	app.Post("/login", docEcho[struct{ Body bites.Form[docLogin] }, bites.SeeOther])
 	app.Post("/signup", docEcho[struct{ Body bites.Submitted[docLogin] }, bites.OneOf2[bites.SeeOther, bites.Page]])
 	app.Post("/avatars", docEcho[struct{ Body bites.Upload }, bites.Text], bites.MaxBody(1<<20))
+	app.Put("/chunks", docEcho[struct{ Body bites.BodyReader }, bites.Text], bites.MaxBody(8<<20))
 	app.Get("/export", docEcho[struct{}, bites.File])
 	app.Get("/events", docEcho[struct{}, bites.SSE])
 	app.Get("/feed", docEcho[struct{}, bites.Stream])
@@ -1311,6 +1312,33 @@ func TestAJSONRawMessageIsFreeFormByNameAndNeedsNoRegistration(t *testing.T) {
 	}
 }
 
+type styleBits struct {
+	Bold  bool   `json:"bold"`
+	Color string `json:"color"`
+}
+
+type rawJSONBody struct {
+	Style bites.RawJSON[styleBits]
+	Tags  bites.Opt[bites.RawJSON[[]string]]
+}
+
+func TestARawJSONIsDocumentedAsItsTypeAllowingNullInARequestAndAResponse(t *testing.T) {
+	doc := docOf(t, func(app *bites.App) {
+		app.Post("/raw", func(context.Context, struct{ Body rawJSONBody }) (rawJSONBody, error) { return rawJSONBody{}, nil })
+		app.OpenAPI("/openapi.json", bites.Info{Title: "T", Version: "1"})
+	})
+	s := jsonOf(dig(doc, "components", "schemas"))
+	if !strings.Contains(s, `"style":{"anyOf":[{"$ref":"#/components/schemas/styleBits.Request"},{"type":"null"}]}`) {
+		t.Errorf("style: %s", s)
+	}
+	if !strings.Contains(s, `"tags":{"items":{"type":"string"},"type":["array","null"]}`) {
+		t.Errorf("tags: %s", s)
+	}
+	if !strings.Contains(s, `"styleBits.Request":{`) || !strings.Contains(s, `"bold":{"type":"boolean"}`) {
+		t.Errorf("the named type is a component: %s", s)
+	}
+}
+
 func TestARegisteredJSONTypeIsStillReadAndWrittenByItsOwnMethods(t *testing.T) {
 	srv := startWith(t, func(app *bites.App) {
 		app.Post("/stamps", func(_ context.Context, in struct{ Body struct{ At stamp } }) (struct{ At stamp }, error) {
@@ -1605,3 +1633,31 @@ type (
 
 func (exStaleDeprecation) DeprecatedFields() []string { return []string{"Nmae"} }
 func (exStaleSection) DeprecatedFields() []string     { return []string{"Nmae"} }
+
+func TestAnErrorStatusWithMembersIsAProblemAnswerWithTheFieldsOfItsTypeAddedInTheDocument(t *testing.T) {
+	doc := docOf(t, func(app *bites.App) {
+		app.OpenAPI("/openapi.json", bites.Info{Title: "t", Version: "1"})
+		g := app.Group("/docs", bites.ErrorStatuses(404))
+		g.Post("/{id}/ops", func(context.Context, struct{ Path struct{ ID int64 } }) (bites.NoContent, error) {
+			return bites.NoContent{}, nil
+		}, bites.ErrorStatus[staleBlocks](409), bites.ErrorStatuses(412))
+	})
+	rs := dig(doc, "paths", "/docs/{id}/ops", "post", "responses").(map[string]any)
+	if dig(rs, "409", "$ref") != nil || dig(rs, "409", "content", "application/problem+json", "schema", "allOf") == nil {
+		t.Fatalf("a 409 with members is its own response, not the shared Error: %s", jsonOf(rs["409"]))
+	}
+	all := dig(rs, "409", "content", "application/problem+json", "schema", "allOf").([]any)
+	if len(all) != 2 || dig(all[0], "properties", "title") == nil || dig(all[0], "properties", "request_id") == nil {
+		t.Fatalf("the first part is the problem's own members: %s", jsonOf(all))
+	}
+	if dig(all[1], "$ref") != "#/components/schemas/staleBlocks" {
+		t.Fatalf("the second part is the type of the members: %s", jsonOf(all[1]))
+	}
+	st := dig(doc, "components", "schemas", "staleBlocks").(map[string]any)
+	if dig(st, "properties", "conflicts", "items", "$ref") == nil || dig(st, "properties", "hint") == nil {
+		t.Fatalf("the members' schema has the wire names of the fields: %s", jsonOf(st))
+	}
+	if dig(rs, "404", "$ref") != "#/components/responses/Error" || dig(rs, "412", "$ref") != "#/components/responses/Error" {
+		t.Errorf("the other statuses are the shared Error: %s", jsonOf(rs))
+	}
+}

@@ -137,6 +137,14 @@ func (c *ecompiler) compile(t reflect.Type, path string, inField bool) (*enode, 
 	if c.opt.opaque(t, Encoding) {
 		return nil, c.opt.opaqueRefusal(path, t, Encoding)
 	}
+	if err := checkRawJSON(t, path); err != nil {
+		return nil, err
+	}
+	if elem, ok := wire.RawJSONOf(t); ok {
+		if _, err := c.compile(elem, path, false); err != nil {
+			return nil, err
+		}
+	}
 	if t.Kind() == reflect.Interface || hasMarshaler(t) || isByteSeq(t) {
 		return &enode{kind: eDelegate, typ: t}, nil
 	}

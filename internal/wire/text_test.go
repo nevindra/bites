@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -24,6 +25,8 @@ func (emptyEnum) Values() []emptyEnum { return nil }
 type badEnum string
 
 func (badEnum) Values() int { return 0 }
+
+var errUnmarshal = errors.New("the type's own error text")
 
 type hexByte byte
 
@@ -179,7 +182,7 @@ func TestATextUnmarshalerTypeUsesItsOwnParserAndHidesItsError(t *testing.T) {
 	if err != nil || got != 'a' {
 		t.Errorf("got %v, %v", got, err)
 	}
-	if _, err := decode[hexByte]("abc"); msg(err) != "expected a valid value" {
+	if _, err := decode[hexByte]("abc"); msg(err) != "expected a valid value of type wire.hexByte" {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -355,10 +358,10 @@ func TestATypeRegisteredWithAFormatSaysTheFormatsSentenceWhenItDoesNotDecode(t *
 	}
 }
 
-func TestATypeWithoutARegisteredFormatKeepsTheGenericSentence(t *testing.T) {
+func TestATypeWithoutARegisteredFormatIsToldTheSentenceNamingItsType(t *testing.T) {
 	dec, _ := CompileText(reflect.TypeFor[foreignID]())
 	var v foreignID
-	if got := msg(dec(unsafe.Pointer(&v), "toolong")); got != "expected a valid value" {
+	if got := msg(dec(unsafe.Pointer(&v), "toolong")); got != "expected a valid value of type wire.foreignID" {
 		t.Errorf("got %q", got)
 	}
 }

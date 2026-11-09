@@ -96,6 +96,7 @@ const (
 	bodyForm      // Form[T]: see form.go
 	bodyUpload    // an Upload: read by the handler, part by part (ADR 0044)
 	bodyMultipart // Multipart[T], or a Submitted[T] with a file field: see multipart.go
+	bodyReader    // a BodyReader: the body as an io.Reader, read by the handler as it arrives (ADR 0044)
 )
 
 type bodyPlan struct {
@@ -235,6 +236,9 @@ func (c *compiler) compileInput(t reflect.Type) (*inputPlan, error) {
 			b, err := c.body(where, f.Type, f.Offset)
 			if err != nil {
 				return nil, err
+			}
+			if b.kind == bodyReader && !c.cfg.maxBodySet {
+				return nil, refusalf("%s is a BodyReader, but the route has no MaxBody: how much a route may receive is the application's decision (a part wants 8 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it", where)
 			}
 			if b.kind == bodyUpload && !c.cfg.maxBodySet {
 				return nil, refusalf("%s is an Upload, but the route has no MaxBody: how much a route may receive is the application's decision (an avatar wants 2 MiB, a video 2 GiB), so there is no default; give MaxBody(n) to the route or to a group above it", where)
@@ -847,6 +851,10 @@ func (c *compiler) body(goPath string, t reflect.Type, off uintptr) (*bodyPlan, 
 		return c.formBody(goPath, t, off)
 	case t == uploadType:
 		return &bodyPlan{kind: bodyUpload, off: off}, nil
+	case t == bodyReaderType:
+		return &bodyPlan{kind: bodyReader, off: off}, nil
+	case containsType(t, bodyReaderType, map[reflect.Type]bool{}):
+		return nil, refusalf("%s holds a BodyReader; a BodyReader is the whole Body, read as it arrives, not a field of a JSON body", goPath)
 	case containsUpload(t, map[reflect.Type]bool{}):
 		return nil, refusalf("%s holds an Upload; an Upload is the whole Body, read part by part, not a field of a JSON body", goPath)
 	case containsMultipart(t, map[reflect.Type]bool{}):
@@ -869,5 +877,5 @@ func (c *compiler) body(goPath string, t reflect.Type, off uintptr) (*bodyPlan, 
 		}
 		return &bodyPlan{kind: bodyJSON, off: off, dec: d}, nil
 	}
-	return nil, refusalf("%s is %s; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T] or Upload", goPath, t)
+	return nil, refusalf("%s is %s; a Body is a struct, slice or map (read as JSON), []byte, Raw[T], Form[T], Multipart[T], Submitted[T], Upload or BodyReader", goPath, t)
 }

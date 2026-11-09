@@ -49,23 +49,28 @@ type outPlan struct {
 	enc      *jsoncodec.Encoder // the value, or a wrapper's Body, or an Events' T; nil when there is no body
 	// sizeHint is the length of this route's last large JSON body, with an eighth of slack, or 0:
 	// the next answer reserves it at once rather than growing by doubling (engine.Response.Reserve).
-	sizeHint atomic.Int64
-	events   eventsType // Events[T]: builds its runner and names T
-	bodyOff  uintptr
-	hdrOff   uintptr
-	cookOff  uintptr
-	locOff   uintptr
-	statOff  uintptr
-	ctOff    uintptr // Bytes: where the content type is
-	hasLoc   bool
-	mustLoc  bool    // SetsLocation: an empty Location is a logged 500, and the document requires the header
-	funcOff  uintptr // a stream's function
-	liveOff  uintptr // a Stream's Live flag
-	rootOff  uintptr // File: the os.Root
-	fsOff    uintptr // File: the fs.FS
-	nameOff  uintptr // File: the name inside either
-	attOff   uintptr // File, Bytes, Stream: the Attachment name
-	hasAtt   bool
+	sizeHint   atomic.Int64
+	events     eventsType // Events[T]: builds its runner and names T
+	bodyOff    uintptr
+	hdrOff     uintptr
+	cookOff    uintptr
+	locOff     uintptr
+	statOff    uintptr
+	ctOff      uintptr // Bytes: where the content type is
+	hasLoc     bool
+	mustLoc    bool    // SetsLocation: an empty Location is a logged 500, and the document requires the header
+	funcOff    uintptr // a stream's function
+	liveOff    uintptr // a Stream's Live flag
+	doneOff    uintptr // a stream's Done
+	rootOff    uintptr // File: the os.Root
+	fsOff      uintptr // File: the fs.FS
+	openOff    uintptr // File: the Open function
+	sizeOff    uintptr // File: the Size of what Open returns
+	modOff     uintptr // File: the ModTime of Open or Content
+	contentOff uintptr // File: the Content bytes
+	nameOff    uintptr // File: the name inside either
+	attOff     uintptr // File, Bytes, Stream: the Attachment name
+	hasAtt     bool
 }
 
 var wrapperNames = []struct {
@@ -110,6 +115,10 @@ func (a *App) compileOutput(t reflect.Type) (*outPlan, error) {
 				continue
 			}
 			p.wk = w.kind
+			if w.kind >= wrapStream {
+				f, _ := t.FieldByName("Done")
+				p.doneOff = f.Offset
+			}
 			if w.kind == wrapStream || w.kind == wrapSSE {
 				f, _ := t.FieldByName("Func")
 				p.funcOff = f.Offset
@@ -139,7 +148,7 @@ func (a *App) compileOutput(t reflect.Type) (*outPlan, error) {
 				p.statOff = f.Offset
 			}
 			if w.kind == wrapFile {
-				for name, off := range map[string]*uintptr{"Root": &p.rootOff, "FS": &p.fsOff, "Name": &p.nameOff, "ContentType": &p.ctOff} {
+				for name, off := range map[string]*uintptr{"Root": &p.rootOff, "FS": &p.fsOff, "Open": &p.openOff, "Size": &p.sizeOff, "ModTime": &p.modOff, "Content": &p.contentOff, "Name": &p.nameOff, "ContentType": &p.ctOff} {
 					f, _ := t.FieldByName(name)
 					*off = f.Offset
 				}
@@ -302,7 +311,7 @@ func (p *outPlan) write(a *App, ex *engine.Exchange, src unsafe.Pointer, ctx con
 		return
 	}
 	if p.wk == wrapFile {
-		p.writeFile(a, ex, src)
+		p.writeFile(a, ex, src, ctx)
 		return
 	}
 	if p.wk >= wrapStream {

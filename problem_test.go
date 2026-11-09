@@ -201,6 +201,15 @@ func TestAnErrorWithAStatusInItsChainIsNeverAskedOfTheErrorMapper(t *testing.T) 
 	}
 }
 
+func TestGoneAnswers410WithTheMessageAsDetail(t *testing.T) {
+	srv := startMapped(t, func(app *bites.App) {
+		app.Get("/invite", failWith(bites.Gone("this invitation was already used")))
+		app.Get("/wrapped", failWith(fmt.Errorf("load invite: %w", bites.Gone("this link expired"))))
+	})
+	wantProblem(t, srv.Do(req("GET", "/invite")), 410, `{"title":"Gone","status":410,"detail":"this invitation was already used"}`)
+	wantProblem(t, srv.Do(req("GET", "/wrapped")), 410, `{"title":"Gone","status":410,"detail":"this link expired"}`)
+}
+
 func TestAProviderAndAMiddlewareErrorAreAnsweredByTheErrorMapper(t *testing.T) {
 	srv := startMapped(t, func(app *bites.App) {
 		app.Get("/mw", func(context.Context, Empty) (struct{}, error) { return struct{}{}, nil },
@@ -334,4 +343,77 @@ func TestPreconditionRequiredIsA428AndAnyRegisteredStatusIsTitledByItsReasonPhra
 	wantProblem(t, srv.Do(req("PUT", "/a")), 428, `{"title":"Precondition Required","status":428,"detail":"send If-Match"}`)
 	wantProblem(t, srv.Do(req("PUT", "/b")), 423, `{"title":"Locked","status":423,"detail":"locked by ada"}`)
 	wantProblem(t, srv.Do(req("PUT", "/c")), 499, `{"title":"Status 499","status":499,"detail":"odd"}`)
+}
+
+type staleConflict struct {
+	ID           string
+	BlockVersion int
+}
+
+type staleBlocks struct {
+	Conflicts []staleConflict
+	Hint      bites.Opt[string]
+}
+
+func TestAnErrorWithMembersWritesThemWithTheResponseCodecAtTheProblemsTopLevel(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Post("/ops", failWith(bites.WithMembers(bites.Conflict("stale batch"), staleBlocks{
+			Conflicts: []staleConflict{{ID: "b1", BlockVersion: 3}},
+		})), bites.ErrorStatus[staleBlocks](409))
+	})
+	wantProblem(t, srv.Do(req("POST", "/ops")), 409, `{"title":"Conflict","status":409,"detail":"stale batch","conflicts":[{"id":"b1","block_version":3}]}`)
+}
+
+func TestAnErrorWithMembersWritesAnOptThatIsSetAsItIsWrittenElsewhere(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Post("/ops", failWith(bites.WithMembers(bites.Conflict("stale"), staleBlocks{Hint: bites.Some("reload")})), bites.ErrorStatus[staleBlocks](409))
+	})
+	wantProblem(t, srv.Do(req("POST", "/ops")), 409, `{"title":"Conflict","status":409,"detail":"stale","conflicts":[],"hint":"reload"}`)
+}
+
+func TestAMemberGivenWithWithIsWrittenByTheResponseCodecSoAStructHasWireNamesAndAnEmptyOptIsLeftOut(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Get("/x", failWith(bites.Conflict("c").With("first", staleConflict{ID: "a", BlockVersion: 2}).With("note", staleBlocks{})))
+	})
+	wantProblem(t, srv.Do(req("GET", "/x")), 409, `{"title":"Conflict","status":409,"detail":"c","first":{"id":"a","block_version":2},"note":{"conflicts":[]}}`)
+}
+
+func TestAMemberGivenWithWithThatNamesAProblemMemberIsLeftOutAndLogged(t *testing.T) {
+	srv, lb := startLogged(t, func(app *bites.App) {
+		app.Get("/x", failWith(bites.Conflict("c").With("request_id", "mine").With("code", "k")))
+	})
+	wantProblem(t, srv.Do(req("GET", "/x")), 409, `{"title":"Conflict","status":409,"detail":"c","code":"k"}`)
+	if !strings.Contains(lb.String(), "belongs to the problem body") || !strings.Contains(lb.String(), "request_id") {
+		t.Fatalf("the member left out was not logged:\n%s", lb.String())
+	}
+}
+
+func TestMembersOfATypeNoRouteStatesAreSentAndLoggedAsOnesTheDocumentLacks(t *testing.T) {
+	srv, lb := startLogged(t, func(app *bites.App) {
+		app.Post("/ops", failWith(bites.WithMembers(bites.Conflict("stale"), staleBlocks{})), bites.ErrorStatuses(409))
+	})
+	wantProblem(t, srv.Do(req("POST", "/ops")), 409, `{"title":"Conflict","status":409,"detail":"stale","conflicts":[]}`)
+	if log := lb.String(); !strings.Contains(log, "ErrorStatus[bites_test.staleBlocks](409)") || !strings.Contains(log, "level=WARN") {
+		t.Fatalf("the unstated members were not logged with the option to give:\n%s", log)
+	}
+}
+
+func TestMembersThatAreNotAStructAreLeftOutAndLoggedAsAnError(t *testing.T) {
+	srv, lb := startLogged(t, func(app *bites.App) {
+		app.Get("/x", failWith(bites.WithMembers(bites.Conflict("c"), 7)))
+	})
+	wantProblem(t, srv.Do(req("GET", "/x")), 409, `{"title":"Conflict","status":409,"detail":"c"}`)
+	if !strings.Contains(lb.String(), "not a struct") {
+		t.Fatalf("not logged:\n%s", lb.String())
+	}
+}
+
+func TestAMemberGivenWithWithUnderANameOfTheMembersTypeIsLeftOutAndLogged(t *testing.T) {
+	srv, lb := startLogged(t, func(app *bites.App) {
+		app.Get("/x", failWith(bites.WithMembers(bites.Conflict("c"), staleBlocks{}).With("conflicts", 1)), bites.ErrorStatus[staleBlocks](409))
+	})
+	wantProblem(t, srv.Do(req("GET", "/x")), 409, `{"title":"Conflict","status":409,"detail":"c","conflicts":[]}`)
+	if !strings.Contains(lb.String(), "has a field of this name") {
+		t.Fatalf("not logged:\n%s", lb.String())
+	}
 }

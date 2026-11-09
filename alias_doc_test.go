@@ -18,6 +18,7 @@ var aliasTypes = map[string]reflect.Type{
 	"Opt":             reflect.TypeFor[bites.Opt[int]](),
 	"CSV":             reflect.TypeFor[bites.CSV[int]](),
 	"Null":            reflect.TypeFor[bites.Null[int]](),
+	"RawJSON":         reflect.TypeFor[bites.RawJSON[int]](),
 	"Date":            reflect.TypeFor[bites.Date](),
 	"NamingPolicy":    reflect.TypeFor[bites.NamingPolicy](),
 	"Clock":           reflect.TypeFor[bites.Clock](),
