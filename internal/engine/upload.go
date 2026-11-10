@@ -192,6 +192,9 @@ func (m *Multipart) start() error {
 	c := m.c
 	s := c.srv
 	req := &c.sc.req
+	if req.Chunked || int64(c.r1-c.r0) < req.ContentLength {
+		c.holdBody() // before the chunked input is taken from the buffer, and before the deadline
+	}
 	if req.Expect100 && !m.ex.sent100 {
 		m.ex.sent100 = true
 		c.setWriteDeadline(s.now().Add(s.o.WriteTimeout))
@@ -239,6 +242,9 @@ func (u *uploadSource) Fill(dst []byte) (int, error) {
 		}
 	}
 	u.remain -= int64(n)
+	if u.remain == 0 {
+		c.releaseBody(false) // the body is over: the watch may read what follows
+	}
 	return n, nil
 }
 
@@ -276,6 +282,7 @@ func (u *uploadSource) fillChunked(dst []byte) (int, error) {
 		}
 		if done {
 			u.done = true
+			c.releaseBody(false)
 			if u.fromAux {
 				c.sc.auxRest = u.in
 			} else {
@@ -309,6 +316,7 @@ func (u *uploadSource) fail(err error) error {
 		}
 	default:
 		u.err = ErrBodyShort
+		m.c.releaseBody(true) // the read saw the client go, which a held watch could not
 	}
 	return u.err
 }
@@ -405,7 +413,9 @@ func (ex *Exchange) finishUpload() {
 		if m.raw {
 			complete = m.src.whole() && !ex.closeAfter
 		} else if m.win != nil && m.p.Ended() && !ex.closeAfter {
-			m.c.setReadDeadline(m.until)
+			if !m.src.whole() {
+				m.c.setReadDeadline(m.until) // a whole body drains from the window: the watch may be reading
+			}
 			complete = m.p.Drain() == nil
 		}
 		if m.src.chunked {
@@ -419,5 +429,6 @@ func (ex *Exchange) finishUpload() {
 			ex.closeAfter = true
 		}
 	}
+	ex.c.releaseBody(false) // a body the handler left unread: what is left is not read again
 	m.shut()
 }

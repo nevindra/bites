@@ -281,6 +281,7 @@ func (ex *Exchange) ReadBody(max int64, timeout time.Duration) ([]byte, error) {
 	// A body already whole in the read buffer is not waited for, so it needs no deadline: the
 	// usual small POST skips a clock read and two timer changes (docs/research/hotpath-mac).
 	if req.Chunked || int64(c.r1-c.r0) < req.ContentLength {
+		c.holdBody() // before the deadline: stopping a reader goroutine moves it
 		c.setReadDeadline(s.now().Add(timeout))
 	}
 	var body []byte
@@ -293,14 +294,18 @@ func (ex *Exchange) ReadBody(max int64, timeout time.Duration) ([]byte, error) {
 	if err != nil {
 		ex.closeAfter = true
 		if errors.Is(err, os.ErrDeadlineExceeded) {
+			c.releaseBody(false)
 			return nil, ErrBodyTimeout
 		}
 		var he *h1.Error
 		if errors.As(err, &he) {
+			c.releaseBody(false)
 			return nil, he
 		}
+		c.releaseBody(true)
 		return nil, ErrBodyShort
 	}
+	c.releaseBody(false)
 	ex.bodyState, ex.body = bodyRead, body
 	ex.readN = int64(len(body))
 	return body, nil

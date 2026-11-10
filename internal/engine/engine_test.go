@@ -338,6 +338,40 @@ func TestAnUnreadBodyIsDrainedSoTheNextRequestStartsCleanly(t *testing.T) {
 	}
 }
 
+func TestWithTheReaderFallbackAnUnreadBodyIsDrainedWithTheByteTheWatchTook(t *testing.T) {
+	sent := make(chan struct{})
+	_, c := tcpPair(t, true, func(ex *Exchange) {
+		if ex.Head().Method[0] == 'P' {
+			ex.Context().Done()
+			<-sent
+			time.Sleep(30 * time.Millisecond) // the watch takes the body's next byte
+			ex.Respond(204)
+			return
+		}
+		okHandler(string(ex.Head().Method))(ex) // a byte of the body before the next head would show here
+	})
+	body := strings.Repeat("z", 20000)
+	c.Write([]byte("POST /p HTTP/1.1\r\nHost: x\r\nContent-Length: 20000\r\n\r\n" + body[:100]))
+	time.Sleep(30 * time.Millisecond)
+	c.Write([]byte(body[100:101]))
+	close(sent)
+	time.Sleep(60 * time.Millisecond)
+	c.Write([]byte(body[101:] + get))
+	c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	var all strings.Builder
+	buf := make([]byte, 4096)
+	for strings.Count(all.String(), "HTTP/1.1 ") < 2 || !strings.HasSuffix(all.String(), "T") {
+		m, err := c.Read(buf)
+		if err != nil {
+			t.Fatalf("%v; got %q", err, all.String())
+		}
+		all.Write(buf[:m])
+	}
+	if !strings.Contains(all.String(), " 204 ") || !strings.HasSuffix(all.String(), "\r\n\r\nGET") {
+		t.Fatalf("got %q", all.String())
+	}
+}
+
 func TestAnUnreadBodyTooBigToDrainClosesTheConnection(t *testing.T) {
 	r := newRig(t, func(ex *Exchange) { ex.Respond(204) }, nil)
 	c := r.dial()

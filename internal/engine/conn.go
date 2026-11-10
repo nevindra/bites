@@ -42,6 +42,7 @@ const (
 	modeEpoll
 	modeMem
 	modeReader
+	modeHeld // armed while a body is being read: the reader goroutine waits for the body to end (holdBody)
 )
 
 // scratch is everything the engine pools: what a request needs while it is read and answered,
@@ -131,7 +132,10 @@ type conn struct {
 	pad       uint8     // the padding a hot wait blocks under (waitHot): a tier, the goroutine's, so serve resets it
 
 	pk atomic.Int32 // who owns the connection: a goroutine, or the poller while it is parked (park.go)
-	ps *parkState   // made the first time the connection parks
+	// held is set while the request's body is read from the socket (holdBody): the reader-goroutine
+	// fallback must not read then, or it takes a byte of the body. In what was padding.
+	held atomic.Bool
+	ps   *parkState // made the first time the connection parks
 }
 
 // What awaitRequest found.
@@ -928,6 +932,11 @@ func (c *conn) skipBody(rest int64) bool {
 	sc := c.sc
 	cl := sc.req.ContentLength
 	c.r0 += min(c.r1-c.r0, int(cl))
+	if rest > 0 && c.hasPend {
+		// The reader-goroutine fallback took the byte after the buffer, which is the body's.
+		c.hasPend = false
+		rest--
+	}
 	if rest <= 0 {
 		return true
 	}
@@ -1141,6 +1150,71 @@ func (c *conn) Arm(x *reqctx.Ctx) {
 			}
 		}
 	}
+	if c.held.Load() {
+		// The body is being read from the socket: a reader goroutine would take its next byte.
+		// The watch starts when the body is over, and until then the body's read sees the client
+		// go (releaseBody).
+		w.mode, w.armed = modeHeld, true
+		return
+	}
+	c.armReader(w, x)
+}
+
+// holdBody is called before the request's body is read from the socket, by whichever goroutine
+// reads it. Until releaseBody, the reader-goroutine fallback does not read: one already running is
+// stopped, and the byte it took, the body's next, goes back to the read buffer. The epoll and
+// in-memory watches read nothing, so they carry on.
+func (c *conn) holdBody() {
+	c.held.Store(true)
+	w := c.w.Load()
+	if w == nil {
+		return // an Arm from now on sees held (both are sequentially consistent atomics)
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.armed || w.mode != modeReader {
+		return
+	}
+	w.fbStop.Store(true)
+	c.setReadDeadline(time.Unix(1, 0)) // interrupts the blocked read; the body's read sets its own
+	<-w.fbDone
+	w.fbDone = nil
+	w.mode = modeHeld
+	if c.hasPend {
+		if c.r1 == len(c.sc.buf) {
+			c.growBuf()
+		}
+		c.sc.buf[c.r1] = c.pending
+		c.r1++
+		c.hasPend = false
+	}
+}
+
+// releaseBody ends holdBody once the body is over, whole or not. A watch asked for meanwhile
+// starts now; gone says the body's read saw the client leave, which is then the context's
+// cause, as the watch would have made it. It does nothing when the body was not held.
+func (c *conn) releaseBody(gone bool) {
+	if !c.held.Swap(false) {
+		return
+	}
+	w := c.w.Load()
+	if w == nil {
+		return
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if !w.armed || w.mode != modeHeld {
+		return
+	}
+	x := c.cur.Load()
+	if x == nil {
+		w.mode, w.armed = modeNone, false
+		return
+	}
+	if gone {
+		x.Cancel(reqctx.ErrClientGone)
+		return // stays armed in modeHeld, so nothing reads: the client is gone
+	}
 	c.armReader(w, x)
 }
 
@@ -1161,13 +1235,29 @@ func (c *conn) armReader(w *watchState, x *reqctx.Ctx) {
 	w.fbStop.Store(false)
 	go func() {
 		defer close(done)
-		n, err := c.nc.Read(w.pendBuf[:])
-		if n == 1 {
-			c.pending, c.hasPend = w.pendBuf[0], true
-			return
-		}
-		if err != nil && !w.fbStop.Load() {
+		for {
+			n, err := c.nc.Read(w.pendBuf[:])
+			if n == 1 {
+				c.pending, c.hasPend = w.pendBuf[0], true
+				return
+			}
+			if err == nil || w.fbStop.Load() {
+				return
+			}
+			// A deadline is not a client that left: one set for the connection's own reads (an
+			// upload's drain, lockKick cutting short a goroutine left reading an upload) must not
+			// cancel the context, nor end the watch. Only disarm stops it, with fbStop.
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				c.nc.SetReadDeadline(time.Time{})
+				// disarm stores fbStop before it sets its deadline, so a stop that raced this
+				// reset is seen here, or its deadline comes after the reset and ends the next read.
+				if w.fbStop.Load() {
+					return
+				}
+				continue
+			}
 			x.Cancel(reqctx.ErrClientGone)
+			return
 		}
 	}()
 }
@@ -1176,6 +1266,9 @@ func (c *conn) armReader(w *watchState, x *reqctx.Ctx) {
 func (c *conn) Disarm() { c.disarm() }
 
 func (c *conn) disarm() {
+	if c.held.Load() {
+		c.held.Store(false) // the request is over, whatever its body read did
+	}
 	w := c.w.Load()
 	if w == nil {
 		return
@@ -1199,6 +1292,8 @@ func (c *conn) disarm() {
 		c.setReadDeadline(time.Unix(1, 0)) // interrupts the blocked read
 		<-w.fbDone
 		w.fbDone = nil
+	case modeHeld:
+		// nothing is reading
 	}
 	w.mode = modeNone
 }
