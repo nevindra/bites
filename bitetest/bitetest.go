@@ -24,6 +24,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -50,6 +51,33 @@ type Server struct {
 	ln   *memconn.Listener
 	done chan error
 	logs *testLog
+	stop *stopper
+}
+
+// stopper is what the cleanup Start registers holds of a Server: what Close stops, given up once it
+// is stopped. testing keeps a finished parallel test, with the cleanup functions it registered, until
+// its parent test ends (for a top-level test, until the binary's last parallel test has finished), so a
+// cleanup holding the Server kept the whole App reachable, its routes, codecs and OpenAPI document,
+// long after the test that started it, so a package of many parallel tests that each start an App
+// held every one of them until its last test ended.
+type stopper struct {
+	mu   sync.Mutex
+	app  *bites.App
+	ln   *memconn.Listener
+	logs *testLog
+}
+
+func (st *stopper) close() {
+	st.mu.Lock()
+	app, ln, logs := st.app, st.ln, st.logs
+	st.app, st.ln, st.logs = nil, nil, nil
+	st.mu.Unlock()
+	if app == nil {
+		return
+	}
+	app.Close()
+	ln.Close()
+	logs.stop()
 }
 
 // Start serves app on an in-memory listener and stops it when the test ends. The app's clock is
@@ -66,7 +94,9 @@ func Start(tb testing.TB, app *bites.App) *Server {
 	s := &Server{tb: tb, app: app, ln: memconn.Listen(app.Clock()), done: make(chan error, 1)}
 	s.logs = newTestLog(tb)
 	testlog.Set(app, slog.New(s.logs))
-	tb.Cleanup(s.Close)
+	s.stop = &stopper{app: app, ln: s.ln, logs: s.logs}
+	// Not s.Close: the cleanup must not hold the Server, and through it the App (see stopper).
+	tb.Cleanup(s.stop.close)
 	serve, err := servehook.Start(app, s.ln) // the server is built now, so a Shutdown right after Start stops it
 	if err != nil {
 		tb.Fatalf("bitetest.Start: the app did not start: %v", err)
@@ -75,12 +105,9 @@ func Start(tb testing.TB, app *bites.App) *Server {
 	return s
 }
 
-// Close stops the server and closes every connection.
-func (s *Server) Close() {
-	s.app.Close()
-	s.ln.Close()
-	s.logs.stop()
-}
+// Close stops the server and closes every connection. A second call, such as the cleanup's after
+// the test called it, does nothing.
+func (s *Server) Close() { s.stop.close() }
 
 // WaitEnded returns once every request the server has received whole has ended, which is when
 // the End of its Observers has run (ADR 0051, ADR 0027). Do and Read return when the answer is
