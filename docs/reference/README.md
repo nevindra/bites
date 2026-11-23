@@ -201,6 +201,7 @@ A heading is the exported name itself, so the anchor of `App.Get` is `app.md#app
 - [The API document](./bitetest.md#the-api-document)
 - [`bitetest.Document`](./bitetest.md#bitetestdocument)
 - [`bitetest.UpdateEnv`](./bitetest.md#bitetestupdateenv)
+- [`bitetest.WaitEnv`](./bitetest.md#bitetestwaitenv)
 - [`bitetest.DiffDocuments`](./bitetest.md#bitetestdiffdocuments)
 - [The clock](./bitetest.md#the-clock)
 - [`bitetest.Clock`](./bitetest.md#bitetestclock)

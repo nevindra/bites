@@ -83,9 +83,9 @@ func (s *Server) OpenEvents(r Request) *EventStream {
 			s.tb.Fatalf("bitetest: reading the answer to %s: %v", r.Target, s.explain(res.err))
 		}
 		head = res.r
-	case <-time.After(5 * time.Second):
+	case <-time.After(wait(s.tb)):
 		c.Close()
-		s.tb.Fatalf("bitetest: no answer to %s in 5 s", r.Target)
+		s.tb.Fatalf("bitetest: no answer to %s in %s", r.Target, waitText(wait(s.tb)))
 	}
 	if ct := head.Get("content-type"); head.Status != 200 || !strings.HasPrefix(ct, "text/event-stream") {
 		resp, _ := readBody(br, head, false)
@@ -103,7 +103,7 @@ func (s *Server) OpenEvents(r Request) *EventStream {
 }
 
 // Next returns the next event or comment, and fails the test if the stream ended or nothing came
-// in five real seconds.
+// in five real seconds (or the wait WaitEnv sets).
 func (e *EventStream) Next() Event {
 	e.srv.tb.Helper()
 	ev, err := e.TryNext(0)
@@ -114,14 +114,15 @@ func (e *EventStream) Next() Event {
 }
 
 // TryNext returns the next event or comment, io.EOF once the app has ended the stream, or a
-// timeout error when nothing came in the real time d (five seconds when d is zero). After the
+// timeout error when nothing came in the real time d (when d is zero, five seconds or the wait
+// WaitEnv sets). After the
 // stream ended every call returns the same error.
 func (e *EventStream) TryNext(d time.Duration) (Event, error) {
 	if e.ended != nil {
 		return Event{}, e.ended
 	}
 	if d == 0 {
-		d = 5 * time.Second
+		d = wait(e.srv.tb)
 	}
 	select {
 	case x := <-e.in:

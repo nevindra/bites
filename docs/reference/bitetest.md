@@ -71,7 +71,7 @@ Server is an App being served over memory. It is made by `Start`; the methods be
 func (s *Server) Do(r Request) Response
 ```
 
-Do sends `r` on a new connection, reads one response and closes the connection. It is `Dial`, a request written as HTTP/1.1, and `Read`. A response that does not arrive in five real seconds fails the test. The response is read while the request is written, so an answer the app gives before it has read the whole body (a 413 for a body over `MaxBody`, a 401 from a middleware) is returned as any other. A request whose `Method` is `HEAD` is read as a head with no body. A request after the app was shut down (`Shutdown` with no `WithShutdownDelay`, or `Close`) fails the test with a message that says the app stopped accepting and names `WithShutdownDelay`, as do `Dial`, `Read`, `OpenEvents` and `DialWS`. Use `Dial` and `Read` for a pipelined request, a request that is not valid HTTP, or a client that keeps the connection open.
+Do sends `r` on a new connection, reads one response and closes the connection. It is `Dial`, a request written as HTTP/1.1, and `Read`. A response that does not arrive in five real seconds (or the wait [`WaitEnv`](#bitetestwaitenv) sets) fails the test. The response is read while the request is written, so an answer the app gives before it has read the whole body (a 413 for a body over `MaxBody`, a 401 from a middleware) is returned as any other. A request whose `Method` is `HEAD` is read as a head with no body. A request after the app was shut down (`Shutdown` with no `WithShutdownDelay`, or `Close`) fails the test with a message that says the app stopped accepting and names `WithShutdownDelay`, as do `Dial`, `Read`, `OpenEvents` and `DialWS`. Use `Dial` and `Read` for a pipelined request, a request that is not valid HTTP, or a client that keeps the connection open.
 
 ### `bitetest.Server.Dial`
 
@@ -87,7 +87,7 @@ Dial opens a connection to the server as the client at `remote` (`"203.0.113.9:4
 func (s *Server) Read(c net.Conn, head bool) Response
 ```
 
-Read reads one response from `c`. `head` says the request was HEAD, so the body is not read. A response that does not arrive in five real seconds fails the test.
+Read reads one response from `c`. `head` says the request was HEAD, so the body is not read. A response that does not arrive in five real seconds (or the wait [`WaitEnv`](#bitetestwaitenv) sets) fails the test.
 
 ### `bitetest.Server.Close`
 
@@ -103,7 +103,7 @@ Close stops the server and closes every connection, as `App.Close` does. `Start`
 func (s *Server) WaitEnded()
 ```
 
-WaitEnded returns once every request the server has received whole has ended, which is when the End of its Observers has run ([ADR 0051](../adr/0051-a-request-is-observed-when-it-starts-and-when-it-has-really-ended.md)). `Do` and `Read` return when the answer is read, and End runs after the last byte, so a test that looks at what an Observer recorded (an access record, a counter) calls `WaitEnded` first. It neither sleeps nor polls: it waits on the connections, and a connection reads its next request only after End ([ADR 0027](../adr/0027-an-in-memory-entry-point-runs-the-engine-path.md)). A request being handled, a stream still sending and a client that left mid-handler are waited for; a WebSocket is settled once its upgrade has been answered, since End runs at the 101, not when the socket closes; a request the client has only partly sent is not waited for. If the requests do not end in five real seconds, for a handler held on the fake `Clock` for example, it fails the test with `tb.Fatal`.
+WaitEnded returns once every request the server has received whole has ended, which is when the End of its Observers has run ([ADR 0051](../adr/0051-a-request-is-observed-when-it-starts-and-when-it-has-really-ended.md)). `Do` and `Read` return when the answer is read, and End runs after the last byte, so a test that looks at what an Observer recorded (an access record, a counter) calls `WaitEnded` first. It neither sleeps nor polls: it waits on the connections, and a connection reads its next request only after End ([ADR 0027](../adr/0027-an-in-memory-entry-point-runs-the-engine-path.md)). A request being handled, a stream still sending and a client that left mid-handler are waited for; a WebSocket is settled once its upgrade has been answered, since End runs at the 101, not when the socket closes; a request the client has only partly sent is not waited for. If the requests do not end in five real seconds (or the wait [`WaitEnv`](#bitetestwaitenv) sets), for a handler held on the fake `Clock` for example, it fails the test with `tb.Fatal`.
 
 ```go
 srv.Do(bitetest.Request{Method: "GET", Target: "/users/1"})
@@ -202,7 +202,7 @@ type WSRequest struct {
 }
 ```
 
-WSRequest is the handshake to send. `Target` is the path and query of the route. `Header` adds fields (an `Origin`, a cookie), each with its values as in `Request.Header`, or replaces the `Host`, which is `test`; the upgrade headers and the key are set by the client. `NoAutoPong` stops the client answering the server's pings, for the test of the missed pong. `Timeout` is how long a read waits in real time (five seconds when zero); the server's own timeouts run on the app's clock and are moved with `Clock.Advance`.
+WSRequest is the handshake to send. `Target` is the path and query of the route. `Header` adds fields (an `Origin`, a cookie), each with its values as in `Request.Header`, or replaces the `Host`, which is `test`; the upgrade headers and the key are set by the client. `NoAutoPong` stops the client answering the server's pings, for the test of the missed pong. `Timeout` is how long a read waits in real time (when zero, five seconds or the wait [`WaitEnv`](#bitetestwaitenv) sets); the server's own timeouts run on the app's clock and are moved with `Clock.Advance`.
 
 ### `bitetest.Server.DialWS`
 
@@ -499,7 +499,7 @@ EventStream is a Server-Sent Events answer being read as it arrives. `Status` is
 func (e *EventStream) Next() Event
 ```
 
-Next returns the next event or comment, and fails the test if the stream ended or nothing came in five real seconds.
+Next returns the next event or comment, and fails the test if the stream ended or nothing came in five real seconds (or the wait [`WaitEnv`](#bitetestwaitenv) sets).
 
 ### `bitetest.EventStream.TryNext`
 
@@ -507,7 +507,7 @@ Next returns the next event or comment, and fails the test if the stream ended o
 func (e *EventStream) TryNext(d time.Duration) (Event, error)
 ```
 
-TryNext returns the next event or comment, `io.EOF` once the app has ended the stream, or a timeout error when nothing came in `d` of real time (five seconds when `d` is zero). After the stream ended every call returns the same error.
+TryNext returns the next event or comment, `io.EOF` once the app has ended the stream, or a timeout error when nothing came in `d` of real time (when `d` is zero, five seconds or the wait [`WaitEnv`](#bitetestwaitenv) sets). After the stream ended every call returns the same error.
 
 ### `bitetest.EventStream.Close`
 
@@ -556,6 +556,14 @@ const UpdateEnv = "BITETEST_UPDATE"
 ```
 
 UpdateEnv is the name of the environment variable that makes [`Document`](#bitetestdocument) write its file: `1` or `true`, for one run. Any other value, or none, compares.
+
+### `bitetest.WaitEnv`
+
+```go
+const WaitEnv = "BITETEST_WAIT"
+```
+
+WaitEnv is the name of the environment variable that sets how long bitetest waits in real time for the server before it fails the test: a Go duration such as `30s`. Unset, the wait is five seconds. It is for a machine slower than the one the tests were written on, a shared CI runner, where an answer that took two seconds on a laptop takes ten; it changes the default of every real-time wait of `Do`, `Read`, `WaitEnded`, `OpenEvents`, `EventStream.Next` and `TryNext` with `d` zero, a `WSRequest` with `Timeout` zero and a `BrokerSuite` with `Wait` zero, and not the server's own timeouts, which run on the App's clock. A value that is not a positive duration fails every test that waits, naming the value. A failure at the default wait says it can be raised (`no response in 5 s; a slower machine can set BITETEST_WAIT=30s`), and one at a wait it set names it (`no response in 30 s (BITETEST_WAIT)`). The variable is read once per test process. Decision: [ADR 0074](../adr/0074-the-bitetest-websocket-client-reads-on-its-own-goroutine-and-times-out-in-real-time.md).
 
 ### `bitetest.DiffDocuments`
 
@@ -783,7 +791,7 @@ type BrokerSuite struct {
 }
 ```
 
-BrokerSuite is what `TestBroker` needs. `New` is required: it returns two Brokers that reach each other (the instances of one application on one bus, channel or database), started, and ends them with `t.Cleanup`. `Name` is the Topic name every subtest uses, `conformance.topic` when empty, and must be one the Brokers accept. `Refused` lists names whose `Accepts` must be an error, and the subtest is skipped when it is empty. `MaxPayload` is the largest payload in bytes a Publish to `Name` carries; the suite publishes one of that size, which must be delivered whole, and one a byte larger, which must be a [`*bites.PayloadError`](./websocket.md#payloaderror) (found with `errors.As`) whose `Name` is `Name`, `Size` the larger payload and `Limit` exactly `MaxPayload`, and must deliver nothing; zero skips both subtests. `Wait` is how long a delivery is waited for before the test fails, 5 seconds when zero, and a fiftieth of it is how long the suite listens for a delivery that must not come.
+BrokerSuite is what `TestBroker` needs. `New` is required: it returns two Brokers that reach each other (the instances of one application on one bus, channel or database), started, and ends them with `t.Cleanup`. `Name` is the Topic name every subtest uses, `conformance.topic` when empty, and must be one the Brokers accept. `Refused` lists names whose `Accepts` must be an error, and the subtest is skipped when it is empty. `MaxPayload` is the largest payload in bytes a Publish to `Name` carries; the suite publishes one of that size, which must be delivered whole, and one a byte larger, which must be a [`*bites.PayloadError`](./websocket.md#payloaderror) (found with `errors.As`) whose `Name` is `Name`, `Size` the larger payload and `Limit` exactly `MaxPayload`, and must deliver nothing; zero skips both subtests. `Wait` is how long a delivery is waited for before the test fails, five seconds (or the wait [`WaitEnv`](#bitetestwaitenv) sets) when zero, and a fiftieth of it is how long the suite listens for a delivery that must not come.
 
 ### `bitetest.TestBroker`
 

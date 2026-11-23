@@ -86,7 +86,8 @@ type WSRequest struct {
 	// NoAutoPong stops the client answering the server's pings. By default it answers each with a
 	// pong of the same payload, as a browser does; a test of the missed-heartbeat close turns it off.
 	NoAutoPong bool
-	// Timeout is how long a read waits in real time for the server; five seconds if zero. The
+	// Timeout is how long a read waits in real time for the server; when zero, five seconds or the
+	// wait WaitEnv sets. The
 	// server's own timeouts run on the App's clock and are moved with Clock.Advance, not by this.
 	Timeout time.Duration
 }
@@ -157,7 +158,7 @@ func (s *Server) TryDialWS(r WSRequest) (*WS, Response) {
 	}
 	timeout := r.Timeout
 	if timeout == 0 {
-		timeout = 5 * time.Second
+		timeout = wait(s.tb)
 	}
 	type result struct {
 		resp Response

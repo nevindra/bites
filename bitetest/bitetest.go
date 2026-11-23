@@ -90,12 +90,12 @@ func (s *Server) Close() {
 // being handled, a stream still sending, and a connection the client closed but the server has
 // not finished with are waited for; a WebSocket is settled once its upgrade has been answered
 // (End runs at the 101), not when the socket closes, and a request the client has only partly
-// sent is not waited for. If they do not settle in five real seconds, for a handler held on the
-// fake Clock for example, the test fails.
+// sent is not waited for. If they do not settle in five real seconds (or the wait WaitEnv sets),
+// for a handler held on the fake Clock for example, the test fails.
 func (s *Server) WaitEnded() {
 	s.tb.Helper()
-	if !s.ln.Settled(5 * time.Second) {
-		s.tb.Fatal("bitetest: a request has not ended in 5 s")
+	if d := wait(s.tb); !s.ln.Settled(d) {
+		s.tb.Fatal("bitetest: a request has not ended in " + waitText(d))
 	}
 }
 
@@ -203,8 +203,8 @@ func (r Response) Get(name string) string {
 }
 
 // Do sends r on a new connection, reads one response and closes the connection. A response that
-// does not arrive in five real seconds fails the test. The response is read while the request is
-// written, so an answer the app gives before it has read the whole body (a 413 for a body over
+// does not arrive in five real seconds (or the wait WaitEnv sets) fails the test. The response is
+// read while the request is written, so an answer the app gives before it has read the whole body (a 413 for a body over
 // MaxBody, a 401 from a middleware) is returned as any other, though the app closed the connection
 // on the rest of the body.
 func (s *Server) Do(r Request) Response {
@@ -241,8 +241,10 @@ func (s *Server) Read(c net.Conn, head bool) Response {
 	return r
 }
 
-// read reads one response from c within five real seconds.
+// read reads one response from c within the real-time wait (five seconds unless WaitEnv sets one).
 func (s *Server) read(c net.Conn, head bool) (Response, error) {
+	s.tb.Helper()
+	d := wait(s.tb)
 	type result struct {
 		r   Response
 		err error
@@ -259,8 +261,8 @@ func (s *Server) read(c net.Conn, head bool) (Response, error) {
 		}
 		res.r.app = s.app
 		return res.r, nil
-	case <-time.After(5 * time.Second):
-		return Response{}, errors.New("no response in 5 s")
+	case <-time.After(d):
+		return Response{}, errors.New("no response in " + waitText(d))
 	}
 }
 

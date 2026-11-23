@@ -852,7 +852,8 @@ type BrokerSuite struct {
 	// reach, and skips that subtest.
 	MaxPayload int
 	// Wait is how long the suite waits for a delivery before it fails, and how long it listens
-	// for one that must not come. Zero means 5 seconds to wait and 100 milliseconds to listen.
+	// for one that must not come. Zero means five seconds (or the wait WaitEnv sets) to wait and
+	// 100 milliseconds to listen.
 	Wait time.Duration
 }
 
@@ -874,9 +875,9 @@ func TestBroker(t *testing.T, s BrokerSuite) {
 	if name == "" {
 		name = "conformance.topic"
 	}
-	wait, quiet := s.Wait, s.Wait/50
-	if wait == 0 {
-		wait, quiet = 5*time.Second, 100*time.Millisecond
+	limit, quiet := s.Wait, s.Wait/50
+	if limit == 0 {
+		limit, quiet = wait(t), 100*time.Millisecond
 	}
 	ctx := context.Background()
 	run := func(label string, f func(t *testing.T, a, b bites.Broker)) {
@@ -915,7 +916,7 @@ func TestBroker(t *testing.T, s BrokerSuite) {
 	}
 	awaitCount := func(t *testing.T, k *sink, n int) {
 		t.Helper()
-		deadline := time.After(wait)
+		deadline := time.After(limit)
 		for {
 			k.mu.Lock()
 			have := len(k.got)
@@ -926,7 +927,7 @@ func TestBroker(t *testing.T, s BrokerSuite) {
 			select {
 			case <-k.ch:
 			case <-deadline:
-				t.Fatalf("waited %v for %d deliveries and got %d: %q", wait, n, have, snapshot(k))
+				t.Fatalf("waited %v for %d deliveries and got %d: %q", limit, n, have, snapshot(k))
 			}
 		}
 	}
@@ -1200,8 +1201,8 @@ func clockContext(t *testing.T) (context.Context, *Clock) {
 	select {
 	case ctx := <-got:
 		return ctx, clk
-	case <-time.After(5 * time.Second):
-		t.Fatal("bitetest: the app that carries the suite's clock did not start in 5 s")
+	case <-time.After(wait(t)):
+		t.Fatal("bitetest: the app that carries the suite's clock did not start in " + waitText(wait(t)))
 		return nil, nil
 	}
 }
