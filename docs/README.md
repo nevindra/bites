@@ -94,6 +94,7 @@ In the order the guide teaches them. Each row is one guide page and the referenc
 |---|---|---|
 | [Limits and timeouts](./guide/limits.md) | [`Limits`, route options](./reference/app.md) | [Limits](./design/limits.md) |
 | [Deploying](./guide/deploying.md) | [`App.Listen`, `App.Shutdown`, options](./reference/app.md) | [The engine](./design/engine.md) |
+| [Background jobs](./guide/background-jobs.md) | [`pgjobs`](./reference/pgjobs.md) | [The engine](./design/engine.md) |
 | [Configuration](./guide/configuration.md) | [`config`](./reference/config.md) | [Principles](./design/principles.md) |
 | [Observability](./guide/observability.md) | [Observers, metrics, traces, health](./reference/observability.md), [`otel`](./reference/otel.md) | [Observability](./design/observability.md) |
 | [Testing](./guide/testing.md) | [`bitetest`](./reference/bitetest.md) | [Testing](./design/testing.md) |

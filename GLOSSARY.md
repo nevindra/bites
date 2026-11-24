@@ -376,6 +376,30 @@ _Avoid_: tick, firing, execution
 A `JobLock` with one method, `Claim`, that says whether this instance is the one to run an occurrence: held for its ttl and never released, so at most one run for each occurrence across instances, and a store that fails skips it. It is not a lease, so a job that must happen exactly once is made safe to run twice. `bites.NewMemoryJobLock` is the one of a process, and `bitetest.TestJobLock` holds another to the interface.
 _Avoid_: mutex, distributed lock, lease
 
+**Job**:
+One piece of work kept in Postgres by the `pgjobs` module until it has run: a row with its Job kind, its arguments as JSON, its state (available, running, completed, failed, cancelled), its attempts and its last error. It is enqueued in the transaction of the write it belongs to, so it exists exactly when that write does, and it runs at least once ([ADR 0095](docs/adr/0095-a-job-queue-in-postgres-is-a-module-whose-jobs-are-claimed-under-a-lease-and-delivered-at-least-once.md)). A Cron job keeps nothing; a Job is kept.
+_Avoid_: task, message, background job (a Worker is not one)
+
+**Job kind**:
+A name registered with `pgjobs.Register` with the Go type of its Jobs' arguments and the function that runs one; the `Kind[T]` it returns is the only way to enqueue them, so the arguments are checked by the compiler. It carries the defaults of its Jobs: their queue, attempts, timeout and back-off.
+_Avoid_: job type, handler name, task name
+
+**Job queue**:
+A name in `pgjobs.Options.Queues` with how many of its Jobs one instance runs at once. A Job kind belongs to one, and an enqueue may name another. It is a limit on workers, not a separate table.
+_Avoid_: channel, topic, pool
+
+**Lease**:
+The time a worker holds a running Job before another may take it: set when the Job is claimed and extended by the worker's heartbeat every third of it. A lease that runs out because its instance died gives the Job back to the queue, which is why a Job runs at least once. A Job lock is not a lease.
+_Avoid_: lock, visibility timeout, reservation
+
+**Snooze**:
+What a Job's function returns with `pgjobs.Snooze(d)` to run the Job again after `d` without counting the attempt: a wait for something outside, not a failure.
+_Avoid_: defer, postpone, retry (a retry counts the attempt)
+
+**Periodic job**:
+A Job kind with a schedule (`Kind.Every` for an interval, `Kind.Cron` for a cron spec): each period becomes one Job, enqueued by whichever instance records the period first, with no leader, and run, retried and kept as any Job is. A Cron job runs a function on each instance's schedule and keeps nothing.
+_Avoid_: scheduled task, recurring job, cron job (that is `bites.Cron`)
+
 **Topic**:
 A set of Sockets that one published message reaches, framed once. Made with `NewTopic` and a Broker it reaches the Sockets of every instance of the application.
 _Avoid_: hub, room, channel, broadcaster

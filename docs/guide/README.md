@@ -36,3 +36,4 @@ For the pieces together in one program, [`examples/chat`](../../examples/chat/RE
 24. [The API documentation UI](./api-docs-ui.md): Swagger UI or Scalar for your OpenAPI document, from the `docsui` module.
 25. [Writing descriptions as doc comments](./doc-comments.md): generating the `Descriptions` methods from the comments of your fields.
 26. [Building the documentation site](./documentation-site.md): rendering these pages to static HTML.
+27. [Background jobs](./background-jobs.md): work a request starts but does not wait for, kept in Postgres with the `pgjobs` module: enqueued in the request's transaction, retried, periodic, and run in a test with `Work`.

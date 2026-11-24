@@ -108,6 +108,11 @@ Idle memory is heap plus stack per connection. Full runs, spreads and method: [`
 | [`modules/otel`](modules/otel/) | OpenTelemetry server spans |
 | [`modules/zstd`](modules/zstd/), [`modules/brotli`](modules/brotli/) | extra response encoders |
 | [`modules/docsui`](modules/docsui/) | an API documentation page |
+| [`modules/config`](modules/config/) | typed configuration from flags, the environment and files |
+| [`modules/pgnotify`](modules/pgnotify/), [`modules/natsbroker`](modules/natsbroker/) | a Topic across instances over Postgres `LISTEN`/`NOTIFY` or NATS |
+| [`modules/pgsession`](modules/pgsession/), [`modules/redissession`](modules/redissession/) | sessions in Postgres or Redis, revocable by owner |
+| [`modules/pgratelimit`](modules/pgratelimit/), [`modules/redisratelimit`](modules/redisratelimit/) | rate limits shared by every instance |
+| [`modules/pgjobs`](modules/pgjobs/) | background jobs in Postgres: enqueued in a transaction, retried, periodic |
 
 Each module has its own `go.mod`, so the core stays dependency-free.
 
