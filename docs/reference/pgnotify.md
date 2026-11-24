@@ -82,6 +82,24 @@ func (b *Broker) Publish(ctx context.Context, name string, payload []byte) error
 
 Publish sends `payload` to every instance listening on the channel, this one included. The notification is the name, a newline and the payload and must be at most `MaxNotification` (7999) bytes: a larger one is the error `pgnotify: the notification for "room.1" is 8000 bytes (name, newline and payload), over the Postgres limit of 7999: ...`, checked before the pool is used, and nothing is sent. A payload that is not valid UTF-8 or holds a NUL is refused too. Notifications of one publisher that waits for each Publish arrive in order, and two publishers are ordered by Postgres, the same on every instance. A Topic calls this; an application calls `Topic.Publish`.
 
+### `pgnotify.Broker.PublishTx`
+
+```go
+func (b *Broker) PublishTx(ctx context.Context, tx Execer, name string, payload []byte) error
+```
+
+PublishTx is `Publish` sent through `tx`, usually the application's `pgx.Tx`, instead of the pool: Postgres delivers the notification to every instance listening on the channel when `tx` commits and drops it when `tx` rolls back, so a notification exists exactly when the write it announces does, and a crash between the commit and a `Publish` cannot lose it. Within one transaction Postgres sends identical notifications (same name and payload) once. The checks are `Publish`'s (`Accepts`, the size as a `*bites.PayloadError`, UTF-8 and NUL, `ErrClosed` after `Close`) and are made before `tx` is used; a nil `tx` is an error too. It has no timeout of its own: the statement runs in the caller's transaction under `ctx`, and `PublishTimeout` does not apply. The Broker does not begin, commit or roll back `tx`, and an error from it has aborted the transaction. A Topic does not call this; an application or a module that writes in a transaction does (`pgjobs` sends its wake-up with it, [ADR 0081](../adr/0081-a-topic-reaches-other-instances-through-a-broker-and-postgres-is-a-module.md)).
+
+### `pgnotify.Execer`
+
+```go
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+```
+
+Execer is what `PublishTx` sends its notification through: the `Exec` of a pgx connection. A `pgx.Tx`, a `*pgxpool.Conn`, a `*pgx.Conn` and a `*pgxpool.Pool` satisfy it.
+
 ### `pgnotify.Broker.Subscribe`
 
 ```go

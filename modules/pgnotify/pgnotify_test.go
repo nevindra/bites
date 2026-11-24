@@ -476,3 +476,78 @@ func TestTheBrokerKeepsTheContractOfEveryBroker(t *testing.T) {
 		MaxPayload: pgnotify.MaxNotification - len(name) - 1,
 	})
 }
+
+func TestAPublishInATransactionIsHeardWhenItCommitsAndNeverWhenItRollsBack(t *testing.T) {
+	url, ch := pgURL(t), channelName(t)
+	ctx := context.Background()
+	b := newBroker(t, url, ch, pgnotify.Options{})
+	got := make(chan string, 10)
+	b.Subscribe("orders", func(p []byte) { got <- string(p) }, func() {})
+	conn, err := pgx.Connect(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(ctx)
+
+	rolled, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PublishTx(ctx, rolled, "orders", []byte("rolled-back")); err != nil {
+		t.Fatal(err)
+	}
+	if err := rolled.Rollback(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := conn.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PublishTx(ctx, tx, "orders", []byte("committed")); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.PublishTx(ctx, tx, "orders", []byte("committed")); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case p := <-got:
+		t.Fatalf("%q was heard before the transaction committed", p)
+	case <-time.After(200 * time.Millisecond):
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case p := <-got:
+		if p != "committed" {
+			t.Fatalf("heard %q, want the committed notification", p)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the committed notification never arrived")
+	}
+	select {
+	case p := <-got:
+		t.Fatalf("heard %q after the one committed: the rolled-back one, or the identical second one, was sent", p)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestAPublishInATransactionRefusesWhatPublishRefusesBeforeTouchingTheTransaction(t *testing.T) {
+	b := pgnotify.New(pgnotify.Options{URL: "postgres://nobody@127.0.0.1:1/none"})
+	ctx := context.Background()
+	if err := b.PublishTx(ctx, nil, "a\nb", nil); err == nil || !strings.Contains(err.Error(), "newline") {
+		t.Fatalf("a name with a newline: %v", err)
+	}
+	var pe *bites.PayloadError
+	if err := b.PublishTx(ctx, nil, "n", bytes.Repeat([]byte("x"), pgnotify.MaxNotification)); !errors.As(err, &pe) {
+		t.Fatalf("a notification over the limit: %v, want a *bites.PayloadError", err)
+	}
+	if err := b.PublishTx(ctx, nil, "n", []byte("ok")); err == nil || !strings.Contains(err.Error(), "tx is nil") {
+		t.Fatalf("a nil tx: %v", err)
+	}
+	b.Close()
+	if err := b.PublishTx(ctx, nil, "n", []byte("ok")); !errors.Is(err, pgnotify.ErrClosed) {
+		t.Fatalf("after Close: %v, want ErrClosed", err)
+	}
+}

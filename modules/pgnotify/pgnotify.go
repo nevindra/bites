@@ -26,6 +26,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/nevindra/bites"
 )
@@ -197,6 +198,19 @@ func (b *Broker) Publish(ctx context.Context, name string, payload []byte) error
 	if n := len(name) + 1 + len(payload); n > MaxNotification {
 		return &bites.PayloadError{Name: name, Size: len(payload), Limit: MaxNotification - len(name) - 1}
 	}
+	if err := b.check(name, payload); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, b.opt.PublishTimeout)
+	defer cancel()
+	if _, err := b.pool.Exec(ctx, "SELECT pg_notify($1, $2)", b.opt.Channel, name+"\n"+string(payload)); err != nil {
+		return fmt.Errorf("pgnotify: NOTIFY %q: %w", name, err)
+	}
+	return nil
+}
+
+// check refuses a notification Postgres cannot carry and a Broker that is closed.
+func (b *Broker) check(name string, payload []byte) error {
 	if !utf8.Valid(payload) || bytes.IndexByte(payload, 0) >= 0 {
 		return fmt.Errorf("pgnotify: the payload for %q is not text Postgres can carry (invalid UTF-8 or a NUL): send JSON", name)
 	}
@@ -206,10 +220,40 @@ func (b *Broker) Publish(ctx context.Context, name string, payload []byte) error
 	if closed {
 		return ErrClosed
 	}
-	ctx, cancel := context.WithTimeout(ctx, b.opt.PublishTimeout)
-	defer cancel()
-	if _, err := b.pool.Exec(ctx, "SELECT pg_notify($1, $2)", b.opt.Channel, name+"\n"+string(payload)); err != nil {
-		return fmt.Errorf("pgnotify: NOTIFY %q: %w", name, err)
+	return nil
+}
+
+// Execer is what PublishTx sends its notification through: the Exec of a pgx connection. A pgx.Tx,
+// a *pgxpool.Conn, a *pgx.Conn and a *pgxpool.Pool all satisfy it.
+type Execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// PublishTx is Publish sent through tx, usually the application's pgx.Tx, instead of the pool:
+// Postgres delivers the notification to every instance listening on the channel when tx commits,
+// and drops it when tx rolls back, so a notification exists exactly when the write it announces
+// does and a crash between the commit and a Publish cannot lose it. Within one transaction,
+// Postgres sends identical notifications (same name and payload) once. The checks are Publish's
+// (Accepts, MaxNotification as a *bites.PayloadError, UTF-8 and NUL, ErrClosed after Close) and
+// are made before tx is used. It has no timeout of its own: the statement runs in the caller's
+// transaction under ctx, and PublishTimeout does not apply. The Broker does not begin, commit or
+// roll back tx. A Topic does not call this; an application or a module that writes in a
+// transaction does.
+func (b *Broker) PublishTx(ctx context.Context, tx Execer, name string, payload []byte) error {
+	if err := b.Accepts(name); err != nil {
+		return fmt.Errorf("pgnotify: %w", err)
+	}
+	if n := len(name) + 1 + len(payload); n > MaxNotification {
+		return &bites.PayloadError{Name: name, Size: len(payload), Limit: MaxNotification - len(name) - 1}
+	}
+	if err := b.check(name, payload); err != nil {
+		return err
+	}
+	if tx == nil {
+		return errors.New("pgnotify: PublishTx: tx is nil: give the transaction the notification belongs to, such as the pgx.Tx that pool.Begin(ctx) returned")
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_notify($1, $2)", b.opt.Channel, name+"\n"+string(payload)); err != nil {
+		return fmt.Errorf("pgnotify: NOTIFY %q in the transaction: %w", name, err)
 	}
 	return nil
 }
