@@ -301,12 +301,17 @@ func TestTheAccessLogOfAFailedRequestCarriesTheApplicationsErrorAndADecodingErro
 	})
 	srv.Do(bitetestWith("/fail", "X-Any", "1"))
 	srv.Do(bitetestWith("/users/x", "X-Any", "1"))
-	recs := waitRecords(t, srv, lb, 2)
-	if recs[0]["status"] != 500.0 || recs[0]["error"] != "the database is down" {
-		t.Errorf("a handler's error: %v", recs[0])
+	// A record is written when its request has really ended (ADR 0051), which is after the client
+	// has its answer, so the two records may arrive in either order: each is found by its path.
+	byPath := map[any]map[string]any{}
+	for _, r := range waitRecords(t, srv, lb, 2) {
+		byPath[r["path"]] = r
 	}
-	if _, ok := recs[1]["error"]; recs[1]["status"] != 400.0 || ok {
-		t.Errorf("a 400 the framework wrote has no error: %v", recs[1])
+	if r := byPath["/fail"]; r["status"] != 500.0 || r["error"] != "the database is down" {
+		t.Errorf("a handler's error: %v", r)
+	}
+	if r := byPath["/users/x"]; r["status"] != 400.0 || r["error"] != nil {
+		t.Errorf("a 400 the framework wrote has no error: %v", r)
 	}
 }
 
