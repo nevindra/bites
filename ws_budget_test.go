@@ -39,7 +39,8 @@ type budgetWSRig struct {
 }
 
 // budgetWS serves one WebSocket route on a connection of the kind rig makes and returns the
-// client end after the 101. The handler counts each message it reads in got.
+// client end once the socket is open in the engine. The handler counts each message it reads in
+// got.
 func budgetWS(t *testing.T, rig func(*testing.T, func(*bites.App)) net.Conn) *budgetWSRig {
 	t.Helper()
 	r := &budgetWSRig{closeCh: make(chan bites.CloseInfo, 1)}
@@ -73,6 +74,17 @@ func budgetWS(t *testing.T, rig func(*testing.T, func(*bites.App)) net.Conn) *bu
 		}
 	}
 	<-ready
+	// The client reads the 101 before the engine has marked the socket open, and a Send until
+	// then is queued for the flusher rather than written inline. A message is read only once the
+	// socket is open, so its OnMessage shows the engine is done with the handshake.
+	if _, err := c.Write(ws.AppendClientFrame(nil, true, ws.OpText, []byte(`{"text":"open"}`), [4]byte{1, 2, 3, 4})); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(5 * time.Second); r.got.Load() == 0; runtime.Gosched() {
+		if time.Now().After(deadline) {
+			t.Fatal("the socket did not read a message in 5 s")
+		}
+	}
 	return r
 }
 
