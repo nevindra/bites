@@ -70,7 +70,7 @@ The routes are added with [`App.Get`](../reference/app.md#appget) and [`App.Post
 
 ## Running it
 
-**[`App.Listen`](../reference/app.md#applisten) serves until the app is shut down.** It returns [`ErrServerClosed`](../reference/app.md#errserverclosed) after a clean [`App.Shutdown`](../reference/app.md#appshutdown), so that value is not a failure.
+**[`App.Run`](../reference/app.md#apprun) serves until the context you give it ends, then shuts the app down and returns once the requests in flight have finished.** Its last argument says where to listen: a function that calls [`App.Listen`](../reference/app.md#applisten) with the address.
 
 <!-- compiles: decls -->
 ```go
@@ -79,20 +79,13 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		_ = app.Shutdown(shutdown)
-	}()
-
-	if err := app.Listen(":8080"); err != nil && !errors.Is(err, bites.ErrServerClosed) {
+	if err := app.Run(ctx, 20*time.Second, func() error { return app.Listen(":8080") }); err != nil {
 		log.Fatal(err)
 	}
 }
 ```
 
-The framework installs no signal handler of its own ([ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md)); the lines above that catch the signal and call `Shutdown` are the application's. [Deploying](./deploying.md) covers TLS, proxies and what shutdown does with requests in flight.
+The context ends on Ctrl-C or SIGTERM, and `Run` then gives the requests in flight up to 20 seconds to finish. The framework installs no signal handler of its own ([ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md)); `signal.NotifyContext` is the application's. [Deploying](./deploying.md) covers TLS, several listeners, proxies and what shutdown does with requests in flight.
 
 ## What a client sees for a good request
 

@@ -11,6 +11,14 @@ const RaceEnabled = raceEnabled
 // StartForTest freezes the app and builds what start-up builds (the API document), without serving.
 func StartForTest(a *App) { a.start() }
 
+// SetRunServeWait sets how long Run waits for a serve function after the app stopped, and returns
+// what puts it back.
+func SetRunServeWait(d time.Duration) (restore func()) {
+	old := runServeWait
+	runServeWait = d
+	return func() { runServeWait = old }
+}
+
 // MemoryRateLimitStore is the in-memory buckets of a RateLimiter behind the RateLimitStore
 // interface, so the conformance suite of bitetest holds the store a limiter uses by default to the
 // contract it states for every store.

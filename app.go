@@ -420,6 +420,9 @@ type App struct {
 	srv     *engine.Server
 	serving bool
 
+	stopped  chan struct{} // closed when Shutdown or Close has returned, which Listen and Serve wait for (ADR 0029)
+	stopOnce sync.Once
+
 	api       *openapi.Registry           // the schema generator, made when the first route is described
 	routes    []RouteInfo                 // one per route, appended under mu (ADR 0048)
 	routeList atomic.Pointer[[]RouteInfo] // routes as Routes reads it without mu, so a UseEach function may call it
@@ -480,6 +483,7 @@ func New(opts ...Option) *App {
 		custom:  map[string]bool{},
 		router:  router.New[*route](),
 		methods: map[string]bool{},
+		stopped: make(chan struct{}),
 	}
 	for _, o := range opts {
 		o(a)
@@ -926,7 +930,8 @@ func (a *App) logSettings() {
 	}
 }
 
-// Listen serves on a TCP address until Shutdown or Close, and returns ErrServerClosed then.
+// Listen serves on a TCP address until Shutdown or Close, and returns ErrServerClosed once that
+// call has returned. A main serves with Run, giving it a function that calls Listen.
 // ProxyProtocol among opts makes the listener read a PROXY header from a trusted balancer first
 // (ADR 0058).
 func (a *App) Listen(addr string, opts ...ListenOption) error {
@@ -1016,17 +1021,20 @@ func (a *App) bind(ln net.Listener, tls, proxy bool) (*engine.Server, error) {
 		ln.Close()
 		if err == ErrServerClosed {
 			a.waitStopped()
+			<-a.stopped
 		}
 		return nil, err
 	}
 	return srv, nil
 }
 
-// serveOn accepts on ln until the server closes, then waits for the services to stop.
+// serveOn accepts on ln until the server closes, then waits for Shutdown or Close to return: the
+// drain and the services' stops are over before Listen returns (ADR 0029, ADR 0079).
 func (a *App) serveOn(srv *engine.Server, ln net.Listener, cfg *tls.Config, px *engine.ProxyProtocol) error {
 	err := srv.ServeWith(ln, cfg, px)
 	if errors.Is(err, engine.ErrServerClosed) {
 		a.waitStopped()
+		<-a.stopped
 		return ErrServerClosed
 	}
 	return err
@@ -1113,8 +1121,11 @@ const acmeALPN = "acme-tls/1"
 //
 // With Services (ADR 0079) it first runs their BeforeShutdown functions, in reverse order, and
 // after the drain their Stop functions in reverse order, with ctx. It returns the errors of all
-// of them joined with the server's; Listen and Serve return only after the Stop functions have
-// returned, so "go app.Shutdown(ctx)" followed by Listen is safe.
+// of them joined with the server's.
+//
+// Listen, ListenTLS, ListenUnix, Serve and ServeTLS return ErrServerClosed only once Shutdown has
+// returned, the drain and the Stop functions over, so a main that returns when Listen does never
+// cuts them; Run is how a main calls both (ADR 0029).
 func (a *App) Shutdown(ctx context.Context) error {
 	a.health.draining.Store(true)
 	a.mu.Lock()
@@ -1130,6 +1141,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 	a.limiters.drain() // the requests still waiting for a slot are sent away to retry elsewhere, after the delay that serves them
 	errs = append(errs, srv.Shutdown(ctx))
 	errs = append(errs, a.stopServices(ctx))
+	a.markStopped()
 	return joinErrors(errs...)
 }
 
@@ -1145,7 +1157,9 @@ func (a *App) Close() error {
 		return nil
 	}
 	if len(a.life.services) == 0 {
-		return srv.Close()
+		err := srv.Close()
+		a.markStopped()
+		return err
 	}
 	a.life.markClosed()
 	wctx, cancel := context.WithTimeout(context.Background(), a.life.wait())
@@ -1155,7 +1169,9 @@ func (a *App) Close() error {
 	a.life.beforeOnce.Do(func() {})
 	ctx, done := context.WithCancelCause(context.Background())
 	done(ErrServerClosed)
-	return joinErrors(err, a.stopServices(ctx))
+	err = joinErrors(err, a.stopServices(ctx))
+	a.markStopped()
+	return err
 }
 
 // joinErrors is errors.Join, except that a single error is returned as it is, so a Shutdown whose

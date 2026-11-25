@@ -6,8 +6,10 @@ A listener given `ProxyProtocol()` reads the PROXY protocol, version 1 (text) or
 app := bites.New(bites.WithTrustedProxies(bites.TrustedProxies{
 	Prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/16")}, // the NLB's subnets
 }))
-go app.Listen(":8443", bites.ProxyProtocol()) // the balancer's port
-go app.Listen(":8080")                         // the kubelet's probes, no header
+err := app.Run(ctx, 25*time.Second,
+	func() error { return app.Listen(":8443", bites.ProxyProtocol()) }, // the balancer's port
+	func() error { return app.Listen(":8080") },                         // the kubelet's probes, no header
+)
 ```
 
 ## The rule

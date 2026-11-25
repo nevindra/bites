@@ -538,6 +538,14 @@ _Avoid_: cert store, keypair reloader, hot reload
 What `WithShutdownDelay(d)` adds before `Shutdown` stops accepting: readiness fails and the app keeps serving for `d`, bounded by half of what is left of Shutdown's context, so a balancer stops sending first ([ADR 0052](docs/adr/0052-health-and-readiness-follow-shutdown.md)).
 _Avoid_: grace period (that is Shutdown's context), pre-stop sleep, drain delay
 
+**Grace period**:
+How long `Shutdown` may take once the context of `app.Run` has ended: the timeout of Shutdown's context, which the shutdown delay, the drain and the Services' `BeforeShutdown` and `Stop` all spend; shorter than the orchestrator's kill timeout ([ADR 0029](docs/adr/0029-shutdown-drains-and-then-closes.md)).
+_Avoid_: shutdown timeout (for this one number), drain timeout, kill timeout (that is the orchestrator's)
+
+**Serve function**:
+A `func() error` given to `app.Run` that serves one listener of the app and returns what it returns: a call of `Listen`, `ListenTLS`, `ListenUnix`, `Serve` or `ServeTLS` ([ADR 0029](docs/adr/0029-shutdown-drains-and-then-closes.md)).
+_Avoid_: runner, listener func, server goroutine
+
 **Reference workload**:
 The application shape every design is judged against first: a JSON API over Postgres, with long-lived WebSockets.
 _Avoid_: benchmark, use case

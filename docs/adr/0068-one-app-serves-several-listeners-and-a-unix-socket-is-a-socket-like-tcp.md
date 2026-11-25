@@ -5,10 +5,14 @@ An `App` serves on as many listeners as the application gives it, each with its 
 **Several listeners.** The engine already kept a set of listeners and closed them all when it stopped accepting; what this decision adds is the promise and the log. Each serving call logs one start-up line before it accepts, `bites: listening network=tcp addr=127.0.0.1:8443 tls=true`, so an app on three listeners says what each is. `MaxConns` ([ADR 0024](0024-limits-are-on-by-default.md)) is the app's, shared by every listener: it is a bound on the process's file descriptors and memory, which do not care which listener a connection came from. A listener that fails to bind returns its error to its own caller and the others go on serving; deciding whether that is fatal is the application's.
 
 ```go
-go func() { errs <- app.Listen(":8080") }()                       // plain, for the health checks
-go func() { errs <- app.ListenTLS(":8443", cfg) }()              // TLS
-go func() { errs <- app.ListenUnix("/run/app/app.sock", 0o660) }() // the local proxy
+err := app.Run(ctx, 25*time.Second,
+	func() error { return app.Listen(":8080") },                        // plain, for the health checks
+	func() error { return app.ListenTLS(":8443", cfg) },               // TLS
+	func() error { return app.ListenUnix("/run/app/app.sock", 0o660) }, // the local proxy
+)
 ```
+
+Since 2026-11-25 a `main` gives its listeners to `app.Run`, one serve function each, which shuts all of them down together and, when one fails to bind, shuts the others down and returns its error ([ADR 0029](0029-shutdown-drains-and-then-closes.md)); a listener served on its own goroutine without `Run` still returns its error to its own caller as described here.
 
 **A Unix socket.** `ListenUnix` makes the socket file, sets its permission bits to `perm` (connecting needs write permission, so `0o660` lets the process's group connect: the proxy's user in that group), and the listener removes the file when it closes, at `Shutdown` or `Close`. A socket file left by a process that died without closing (one on which a connection is refused) is removed first; a socket another process answers on is an error, and anything that is not a socket (a regular file, a directory) is left alone and `net.Listen` reports it. TLS on a Unix socket is `ServeTLS` with a `net.Listen("unix", path)` listener; there is no `ListenUnixTLS`, since a local socket rarely needs it.
 

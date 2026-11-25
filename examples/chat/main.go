@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -53,22 +52,6 @@ func run(log *slog.Logger) error {
 	app.SetReady(false) // until the LISTEN connection is up
 	go broker.Run(stop)
 
-	served := make(chan error, 1)
-	go func() { served <- app.Listen(cfg.Addr) }()
-	select {
-	case err := <-served:
-		return err // it never started
-	case <-stop.Done():
-	}
-
-	log.Info("chat: shutting down")
-	grace, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout+cfg.ShutdownDelay)
-	defer cancel()
-	if err := app.Shutdown(grace); err != nil {
-		return err
-	}
-	if err := <-served; err != nil && !errors.Is(err, bites.ErrServerClosed) {
-		return err
-	}
-	return nil
+	// Run shuts the app down when stop ends, within the delay and the drain's own time.
+	return app.Run(stop, cfg.ShutdownTimeout+cfg.ShutdownDelay, func() error { return app.Listen(cfg.Addr) })
 }

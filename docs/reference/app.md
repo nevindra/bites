@@ -52,6 +52,7 @@ A route that cannot work panics with a `*RegistrationError` whose text is the ro
 | a limit option that cannot work | `MaxBody(0) is not a limit: it must be a positive number of bytes` (and the same for `BodyTimeout`, `MaxInFlight`, `MaxParts`, `MaxMessage`) |
 | a nil option | `an option is nil` |
 | a `Service` with no name, with no function, registered twice, or added after the app started serving; `WithServiceTimeout` that is not positive or given twice | see [`Service`](#service) and [`WithServiceTimeout`](#withservicetimeout) |
+| `Run` with a nil context, a grace that is not positive or under twice `WithShutdownDelay`, no serve function or a nil one, or on an app already serving | see [`App.Run`](#apprun); each message starts with `Run:` and says what to give instead |
 | a route or group added after the app started serving | `GET /x registered at file.go:N after the app started serving: routes can be added only before it does` |
 
 The mistakes in the Input and Output types are in [input](./input.md) and [responses](./responses.md), those of Providers in [providers](./providers.md), those of middleware in [middleware](./middleware.md), those of WebSocket routes in [websocket](./websocket.md) and those of the API document in [openapi](./openapi.md).
@@ -443,9 +444,31 @@ Guide: [middleware](../guide/middleware.md). Decision: [ADR 0022](../adr/0022-mi
 
 ## Serving
 
-The engine speaks HTTP/1.1 only; TLS is served with `ServeTLS` and `ListenTLS` and negotiates only `http/1.1` ([ADR 0017](../adr/0017-tls-now-http2-later.md)). The framework installs no signal handler: catching SIGTERM and calling `Shutdown` is two lines of the application's own Go ([ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md)). A handler that panics is recovered by the engine, logged with its stack, and answered with a 500 ([ADR 0028](../adr/0028-panics-are-recovered-by-the-engine.md)).
+The engine speaks HTTP/1.1 only; TLS is served with `ServeTLS` and `ListenTLS` and negotiates only `http/1.1` ([ADR 0017](../adr/0017-tls-now-http2-later.md)). A `main` serves with [`App.Run`](#apprun), which serves until a context the application gives it ends and then shuts the app down; the framework installs no signal handler, so that context comes from `signal.NotifyContext` ([ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md)). A handler that panics is recovered by the engine, logged with its stack, and answered with a 500 ([ADR 0028](../adr/0028-panics-are-recovered-by-the-engine.md)).
 
 Guide: [deploying](../guide/deploying.md).
+
+### `App.Run`
+
+```go
+func (a *App) Run(ctx context.Context, grace time.Duration, serve ...func() error) error
+```
+
+Run serves the app until `ctx` is done, then calls [`Shutdown`](#appshutdown) with a context of `grace`, and returns once everything has stopped: the requests in flight have finished or been closed, the [Services](#service) have stopped, and every serve function has returned. Each serve function serves one listener and returns what it returns, a call of `Listen`, `ListenTLS`, `ListenUnix`, `Serve` or `ServeTLS`; each runs on its own goroutine. `grace` is all of Shutdown's time, the shutdown delay, the drain and the Services' `BeforeShutdown` and `Stop` included: give one shorter than the orchestrator's kill timeout.
+
+It returns nil when `ctx` ended and everything stopped within `grace`, and when `Shutdown` or `Close` called elsewhere stopped the app (once that call has returned). It returns the error of a serve function that failed (an address in use, a Service's failed `Start`) after shutting the other listeners down within `grace`, and Shutdown's error, wrapped as `bites: Run: shutting down within the grace period of 25s: ...`, when the grace ran out (`errors.Is(err, context.DeadlineExceeded)`) or a Service failed to stop. A serve function that returns nil, or has not returned 5 seconds after the app stopped, is an error that names it. The server is built before any serve function runs, so a context that is already done stops the app at once.
+
+It panics with a [`RegistrationError`](#registrationerror) for a nil `ctx`, a `grace` that is not positive or is less than twice `WithShutdownDelay` (the delay is bounded by half of Shutdown's context), no serve function or a nil one, and an app that is already serving (a `Listen`, `Serve`, `bitetest.Start` or another `Run` came first). Decision: [ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md).
+
+<!-- compiles: body -->
+
+```go
+stop, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+defer cancel()
+if err := app.Run(stop, 25*time.Second, func() error { return app.Listen(":8080") }); err != nil {
+	log.Fatal(err)
+}
+```
 
 ### `App.Listen`
 
@@ -453,7 +476,7 @@ Guide: [deploying](../guide/deploying.md).
 func (a *App) Listen(addr string, opts ...ListenOption) error
 ```
 
-Listen serves on a TCP address until `Shutdown` or `Close`, and returns [`ErrServerClosed`](#errserverclosed) then. An error from listening is returned as it is. The first call starts serving: the route table is frozen and the API document, if asked for, is built. `opts` are the settings of this listener, [`ProxyProtocol`](#proxyprotocol) the one there is.
+Listen serves on a TCP address until `Shutdown` or `Close`, and returns [`ErrServerClosed`](#errserverclosed) once that call has returned, the drain and the Services' stops over. An error from listening is returned as it is. A `main` calls it from a serve function given to [`App.Run`](#apprun). The first call starts serving: the route table is frozen and the API document, if asked for, is built. `opts` are the settings of this listener, [`ProxyProtocol`](#proxyprotocol) the one there is.
 
 ### `App.ListenTLS`
 
@@ -469,7 +492,7 @@ ListenTLS is `Listen` for TLS: it serves HTTPS on a TCP address until `Shutdown`
 func (a *App) Serve(ln net.Listener, opts ...ListenOption) error
 ```
 
-Serve serves on `ln` until `Shutdown` or `Close`, and returns `ErrServerClosed` then. The listener may be any `net.Listener`, which is how a test serves the app over memory. More than one Serve may run on one App. Any other error from the listener is returned. `opts` are the settings of this listener.
+Serve serves on `ln` until `Shutdown` or `Close`, and returns `ErrServerClosed` once that call has returned. The listener may be any `net.Listener`, which is how a test serves the app over memory. More than one Serve may run on one App. Any other error from the listener is returned. `opts` are the settings of this listener.
 
 ### `App.ServeTLS`
 
@@ -499,14 +522,17 @@ ListenUnix serves on a Unix socket at `path` until `Shutdown` or `Close`, and re
 
 It panics, before anything is made, for a `perm` of zero or with bits beyond `0o777`: `ListenUnix: the permission Srw-rw---- is not a set of permission bits: give the bits of the socket file, such as 0o660 for the owner and its group, which is who may connect`.
 
-Several listeners: call `Listen`, `ListenTLS`, `ListenUnix`, `Serve` and `ServeTLS` as many times as needed, each on its own goroutine. They share the route table and `MaxConns`, each logs `bites: listening` with its network, address, whether it is TLS and whether it reads the PROXY protocol, and `Shutdown` and `Close` reach all of them. Decision: [ADR 0068](../adr/0068-one-app-serves-several-listeners-and-a-unix-socket-is-a-socket-like-tcp.md).
+Several listeners: give [`App.Run`](#apprun) one serve function for each, a call of `Listen`, `ListenTLS`, `ListenUnix`, `Serve` or `ServeTLS`; each runs on its own goroutine. They share the route table and `MaxConns`, each logs `bites: listening` with its network, address, whether it is TLS and whether it reads the PROXY protocol, and `Shutdown` and `Close` reach all of them. Decision: [ADR 0068](../adr/0068-one-app-serves-several-listeners-and-a-unix-socket-is-a-socket-like-tcp.md).
 
 <!-- compiles: body -->
 
 ```go
-errs := make(chan error, 2)
-go func() { errs <- app.Listen(":8080") }()
-go func() { errs <- app.ListenUnix("/run/app/app.sock", 0o660) }()
+if err := app.Run(ctx, 25*time.Second,
+	func() error { return app.Listen(":8080") },
+	func() error { return app.ListenUnix("/run/app/app.sock", 0o660) },
+); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ### `ListenOption`
@@ -535,8 +561,12 @@ The serving call panics when the app has no `WithTrustedProxies` (`Listen: Proxy
 app = bites.New(bites.WithTrustedProxies(bites.TrustedProxies{
 	Prefixes: []netip.Prefix{netip.MustParsePrefix("10.0.0.0/16")},
 }))
-go app.Listen(":8443", bites.ProxyProtocol()) // the balancer's port
-go app.Listen(":8080")                         // probes, no header
+if err := app.Run(ctx, 25*time.Second,
+	func() error { return app.Listen(":8443", bites.ProxyProtocol()) }, // the balancer's port
+	func() error { return app.Listen(":8080") },                         // probes, no header
+); err != nil {
+	log.Fatal(err)
+}
 ```
 
 Guide: [deploying](../guide/deploying.md#the-proxy-protocol). Decision: [ADR 0058](../adr/0058-the-proxy-protocol-is-turned-on-per-listener-and-accepted-only-from-a-trusted-proxy.md).
@@ -815,25 +845,9 @@ Claim implements [`JobLock`](#joblock). A `ttl` that is not positive is an error
 func (a *App) Shutdown(ctx context.Context) error
 ```
 
-Shutdown stops accepting, closes idle connections, cancels the context of every live stream (`SSE`, and a `Stream` with `Live` set) with the cause `ErrServerClosed`, sends every WebSocket a close with status 1001, and waits for requests in flight, which finish with `Connection: close`. When `ctx` ends first the rest are closed and their contexts cancelled, and Shutdown returns `ctx.Err()`; it returns nil when everything drained. Called on an app that never started serving it returns nil. With [Services](#service) it first runs their `BeforeShutdown` functions and after the drain their `Stop` functions, and returns the errors of all of them joined with the drain's (`context.DeadlineExceeded` for a function that was abandoned); a single error is returned as it is. `Listen` and `Serve` return only after the `Stop` functions have returned, so `go app.Shutdown(ctx)` followed by `app.Listen(addr)` is safe.
+Shutdown stops accepting, closes idle connections, cancels the context of every live stream (`SSE`, and a `Stream` with `Live` set) with the cause `ErrServerClosed`, sends every WebSocket a close with status 1001, and waits for requests in flight, which finish with `Connection: close`. When `ctx` ends first the rest are closed and their contexts cancelled, and Shutdown returns `ctx.Err()`; it returns nil when everything drained. Called on an app that never started serving it returns nil. With [Services](#service) it first runs their `BeforeShutdown` functions and after the drain their `Stop` functions, and returns the errors of all of them joined with the drain's (`context.DeadlineExceeded` for a function that was abandoned); a single error is returned as it is. `Listen`, `ListenTLS`, `ListenUnix`, `Serve` and `ServeTLS` return `ErrServerClosed` only once Shutdown has returned, the drain and the `Stop` functions over, so a program that returns when `Listen` does never cuts them. A `main` does not call Shutdown itself: [`App.Run`](#apprun) calls it when its context ends; Shutdown is for a test and for a program whose end is not a context.
 
 Decision: [ADR 0029](../adr/0029-shutdown-drains-and-then-closes.md).
-
-<!-- compiles: body -->
-
-```go
-go func() {
-	if err := app.Listen(":8080"); err != nil && !errors.Is(err, bites.ErrServerClosed) {
-		log.Fatal(err)
-	}
-}()
-stop, cancel := signal.NotifyContext(ctx, syscall.SIGTERM)
-defer cancel()
-<-stop.Done()
-drain, cancelDrain := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancelDrain()
-_ = app.Shutdown(drain)
-```
 
 ### `App.Close`
 
@@ -841,7 +855,7 @@ _ = app.Shutdown(drain)
 func (a *App) Close() error
 ```
 
-Close stops accepting and closes every connection at once, cancelling the context of each request in flight with `ErrServerClosed`. It returns nil when the app has no [Services](#service); with services it runs their `Stop` functions with a context that is already done (no `BeforeShutdown`), each waited for at most `WithServiceTimeout`, and returns their errors joined. Serve and Listen then return `ErrServerClosed`, after the stops.
+Close stops accepting and closes every connection at once, cancelling the context of each request in flight with `ErrServerClosed`. It returns nil when the app has no [Services](#service); with services it runs their `Stop` functions with a context that is already done (no `BeforeShutdown`), each waited for at most `WithServiceTimeout`, and returns their errors joined. Serve and Listen then return `ErrServerClosed`, once Close has returned.
 
 ### `App.Clock`
 
@@ -865,7 +879,7 @@ Now is the time on the clock of the app that `ctx`'s request belongs to, so a Pr
 var ErrServerClosed = engine.ErrServerClosed
 ```
 
-ErrServerClosed is what `Serve`, `ServeTLS`, `Listen`, `ListenTLS` and `ListenUnix` return after `Shutdown` or `Close`, and the cancel cause of the context of a live stream or a request cut by them. Test for it with `errors.Is(err, bites.ErrServerClosed)`; a handler reads the cause with [`Cause`](./errors.md#cause), not `context.Cause` ([ADR 0016](../adr/0016-the-handler-context-is-cancelled-on-disconnect.md)). Its text is `bites: server closed`.
+ErrServerClosed is what `Serve`, `ServeTLS`, `Listen`, `ListenTLS` and `ListenUnix` return once `Shutdown` or `Close` has returned (`Run` returns nil then), and the cancel cause of the context of a live stream or a request cut by them. Test for it with `errors.Is(err, bites.ErrServerClosed)`; a handler reads the cause with [`Cause`](./errors.md#cause), not `context.Cause` ([ADR 0016](../adr/0016-the-handler-context-is-cancelled-on-disconnect.md)). Its text is `bites: server closed`.
 
 ## TLS certificates
 

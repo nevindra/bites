@@ -406,7 +406,7 @@ WithHealth answers the two paths before app middleware, with `ok` as text/plain,
 func WithShutdownDelay(d time.Duration) Option
 ```
 
-WithShutdownDelay makes `Shutdown` fail readiness and keep serving, with the listener open, for `d` before it stops accepting, so a balancer that learns of a deploy late stops sending first. The delay is bounded by half of what is left of Shutdown's context, runs on the app's clock, is not restarted by a second Shutdown, and ends at `Close`. The default is 0. It panics for a negative delay (`WithShutdownDelay: the delay is -1s, which is not a delay: give zero for none, or a positive duration such as 5*time.Second`) and when given twice.
+WithShutdownDelay makes `Shutdown` fail readiness and keep serving, with the listener open, for `d` before it stops accepting, so a balancer that learns of a deploy late stops sending first. The delay is bounded by half of what is left of Shutdown's context, runs on the app's clock, is not restarted by a second Shutdown, and ends at `Close`. [`App.Run`](./app.md#apprun) panics at start-up for a grace period under twice the delay, which would cut it short. The default is 0. It panics for a negative delay (`WithShutdownDelay: the delay is -1s, which is not a delay: give zero for none, or a positive duration such as 5*time.Second`) and when given twice.
 
 ### `App.SetReady`
 

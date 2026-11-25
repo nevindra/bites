@@ -52,7 +52,12 @@ func getUser(ctx context.Context, in GetUser) (User, error) {
 func main() {
 	app := bites.New()
 	app.Get("/users/{id}", getUser)
-	log.Fatal(app.Listen(":8080"))
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := app.Run(ctx, 20*time.Second, func() error { return app.Listen(":8080") }); err != nil {
+		log.Fatal(err)
+	}
 }
 ```
 

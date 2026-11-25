@@ -76,6 +76,7 @@ A heading is the exported name itself, so the anchor of `App.Get` is `app.md#app
 - [`App.Routes`](./app.md#approutes)
 - [`App.Use`](./app.md#appuse)
 - [Serving](./app.md#serving)
+- [`App.Run`](./app.md#apprun)
 - [`App.Listen`](./app.md#applisten)
 - [`App.ListenTLS`](./app.md#applistentls)
 - [`App.Serve`](./app.md#appserve)

@@ -30,6 +30,9 @@ func refuseAll(r bites.RouteInfo) (bites.Middleware, error) {
 	return nil, fmt.Errorf("no permission for %s", r.OperationID)
 }
 
+// serveNothing is a serve function for the rows of Run that are refused before it is called.
+func serveNothing() error { return nil }
+
 func hereFirst() { _, _, firstLine, _ = runtime.Caller(1) }
 
 // refusalBroker is a Broker that carries nothing, for the rows that are refused before it is used.
@@ -1386,6 +1389,23 @@ func TestEveryMistakeIsRefusedAtRegistrationWithTheMessageWrittenForIt(t *testin
 			"ListenUnix: the permission ---------- is not a set of permission bits: give the bits of the socket file, such as 0o660 for the owner and its group, which is who may connect", false},
 		{"ListenUnix with bits beyond the permission bits", func(a *bites.App) { here(); a.ListenUnix("/nonexistent/x.sock", os.ModeSocket|0o660) },
 			"ListenUnix: the permission Srw-rw---- is not a set of permission bits: give the bits of the socket file, such as 0o660 for the owner and its group, which is who may connect", false},
+		{"Run with a nil context", func(a *bites.App) { var ctx context.Context; here(); a.Run(ctx, time.Second, serveNothing) },
+			"Run: the context is nil: give the context whose end stops the app, the one signal.NotifyContext returns for os.Interrupt and syscall.SIGTERM", false},
+		{"Run with a grace period of zero", func(a *bites.App) { here(); a.Run(context.Background(), 0, serveNothing) },
+			"Run: the grace period 0s is not a time to shut down in: give a positive duration shorter than the orchestrator's kill timeout, such as 25*time.Second under Kubernetes' 30 s", false},
+		{"Run with a grace period under twice the shutdown delay", func(*bites.App) {
+			bites.New(bites.WithShutdownDelay(10*time.Second)).Run(context.Background(), at(15*time.Second), serveNothing)
+		},
+			"Run: the grace period 15s is less than twice WithShutdownDelay(10s): the delay is bounded by half of Shutdown's context, so it would be cut short; give a grace of at least 20s plus the time a request needs to finish", false},
+		{"Run with no serve function", func(a *bites.App) { here(); a.Run(context.Background(), time.Second) },
+			`Run: no serve function: give one for each listener, such as func() error { return app.Listen(":8080") }`, false},
+		{"Run with a nil serve function", func(a *bites.App) { here(); a.Run(context.Background(), time.Second, serveNothing, nil) },
+			"Run: serve function 2 is nil: give a function that returns what app.Listen, ListenTLS, ListenUnix, Serve or ServeTLS returns", false},
+		{"Run on an app that is already serving", func(a *bites.App) {
+			bites.StartForTest(a)
+			a.Run(context.Background(), at(time.Second), serveNothing)
+		},
+			"Run: the app is already serving (a Listen, ListenTLS, ListenUnix, Serve, ServeTLS, bitetest.Start or another Run came first): give every listener to one Run as a serve function, and call nothing else that serves", false},
 		{"Static with both Root and FS", func(a *bites.App) { here(); a.Static("/s", bites.Static{Root: &os.Root{}, FS: fstest.MapFS{}}) },
 			"Static /s: give exactly one of Root and FS", false},
 		{"Static with neither Root nor FS", func(a *bites.App) { here(); a.Static("/s", bites.Static{}) },

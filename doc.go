@@ -10,7 +10,11 @@
 //
 //	app := bites.New()
 //	app.Get("/users/{id}", users.Get)
-//	log.Fatal(app.Listen(":8080"))
+//	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+//	defer stop()
+//	if err := app.Run(ctx, 25*time.Second, func() error { return app.Listen(":8080") }); err != nil {
+//		log.Fatal(err)
+//	}
 //
 // # Registration
 //

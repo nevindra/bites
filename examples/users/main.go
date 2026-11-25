@@ -9,7 +9,11 @@ package main
 import (
 	"context"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/nevindra/bites"
 )
@@ -82,5 +86,10 @@ func newApp() *bites.App {
 }
 
 func main() {
-	log.Fatal(newApp().Listen(":8080"))
+	app := newApp()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := app.Run(ctx, 20*time.Second, func() error { return app.Listen(":8080") }); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -2,14 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"github.com/nevindra/bites"
 )
 
 func main() {
@@ -34,21 +31,9 @@ func main() {
 	if addr == "" {
 		addr = ":8082"
 	}
-	stop, cancelSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancelSignals()
-	served := make(chan error, 1)
-	go func() { served <- app.Listen(addr) }()
-	select {
-	case err := <-served:
-		log.Fatal(err)
-	case <-stop.Done():
-	}
-	grace, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	if err := app.Shutdown(grace); err != nil {
-		log.Fatal(err)
-	}
-	if err := <-served; !errors.Is(err, bites.ErrServerClosed) {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := app.Run(ctx, 25*time.Second, func() error { return app.Listen(addr) }); err != nil {
 		log.Fatal(err)
 	}
 }
