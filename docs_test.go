@@ -65,7 +65,7 @@ func layerPages(t *testing.T) []string {
 // proseFiles are the Markdown files held to one paragraph a line, no em dash, and resolving links.
 func proseFiles(t *testing.T) []string {
 	t.Helper()
-	out := []string{"README.md", "GLOSSARY.md", "CLAUDE.md", "docs/README.md", "docs/roadmap.md"}
+	out := []string{"README.md", "SECURITY.md", "GLOSSARY.md", "CLAUDE.md", "docs/README.md", "docs/roadmap.md"}
 	for _, g := range []string{"docs/adr/*.md", "docs/guide/*.md", "docs/reference/*.md", "docs/design/*.md"} {
 		files, _ := filepath.Glob(filepath.FromSlash(g))
 		for _, f := range files {

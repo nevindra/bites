@@ -7,7 +7,7 @@
 **Tests hold it, in `docs_test.go`, on every `go test`:**
 
 1. every page of the three layers opens with the five lines above;
-2. prose is one paragraph a line and has no em dash, in the three layers, the ADRs, the roadmap, `README.md`, `GLOSSARY.md` and `CLAUDE.md`;
+2. prose is one paragraph a line and has no em dash, in the three layers, the ADRs, the roadmap, `README.md`, `SECURITY.md`, `GLOSSARY.md` and `CLAUDE.md`;
 3. every relative link in those files points at a file that exists, and every `#anchor` at a heading that produces it;
 4. `docs/README.md` links every page of the three layers;
 5. every ADR is linked from a design page, so no decision is left out of the topic pages;

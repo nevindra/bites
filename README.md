@@ -127,6 +127,10 @@ Each module has its own `go.mod`, so the core stays dependency-free.
 > [!NOTE]
 > bites brings the idea of [nilo](https://github.com/nevindra/nilo) (Zig) to Go, and argues each decision again with its own evidence ([ADR 0001](docs/adr/0001-independent-of-nilo.md)). If it ever stops, an ADR says why and this note says so first.
 
+## Security
+
+Report a vulnerability privately, as [SECURITY.md](SECURITY.md) says: it also states what is in scope and which versions are supported.
+
 ## License
 
 [MIT](LICENSE)
