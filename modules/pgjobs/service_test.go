@@ -368,9 +368,8 @@ func TestObserversSeeEachAttemptOutermostFirstWithTheTraceOfTheRequestThatEnqueu
 		return bites.Created[mail]{Body: in.Body}, err
 	})
 	srv := bitetest.Start(t, app)
-	resp := srv.Do(bitetest.Request{Method: "POST", Target: "/signup", Body: []byte(`{"to":"a@b"}`), Header: map[string][]string{
-		"Content-Type": {"application/json"},
-		"Traceparent":  {"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
+	resp := srv.Do(bitetest.Request{Method: "POST", Target: "/signup", JSON: mail{To: "a@b"}, Header: map[string][]string{
+		"Traceparent": {"00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"},
 	}})
 	if resp.Status != 201 {
 		t.Fatalf("POST /signup: %d %s", resp.Status, resp.Body)
@@ -428,7 +427,7 @@ func TestAnApplicationTestRunsTheJobsARequestEnqueuedWithWorkAndNoSleep(t *testi
 		return bites.Created[mail]{Body: in.Body}, tx.Commit(ctx)
 	})
 	srv := bitetest.Start(t, app)
-	srv.Do(bitetest.Request{Method: "POST", Target: "/signup", Body: []byte(`{"to":"ada@example.com"}`), Header: map[string][]string{"Content-Type": {"application/json"}}})
+	srv.Do(bitetest.Request{Method: "POST", Target: "/signup", JSON: mail{To: "ada@example.com"}})
 	if n := work(t, jobs); n != 1 || strings.Join(sent, ",") != "ada@example.com" {
 		t.Fatalf("Work ran %d, sent %v", n, sent)
 	}
