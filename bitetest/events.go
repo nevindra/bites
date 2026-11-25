@@ -5,9 +5,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nevindra/bites/internal/testcodec"
 )
 
 // Event is one thing a Server-Sent Events answer sent: an event, or a comment line. It is
@@ -60,8 +63,9 @@ func (s *Server) OpenEvents(r Request) *EventStream {
 	if r.Method == "" {
 		r.Method = "GET"
 	}
+	req := s.requestBytes(r)
 	c := s.Dial(remoteOf(r))
-	if _, err := c.Write(requestBytes(r)); err != nil {
+	if _, err := c.Write(req); err != nil {
 		c.Close()
 		s.tb.Fatalf("bitetest: writing the request: %v", err)
 	}
@@ -224,8 +228,66 @@ func (c *chunked) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// requestBytes is r written as HTTP/1.1, with Host and Content-Length added as Request says.
-func requestBytes(r Request) []byte {
+// requestBytes is r on the wire, with its JSON written as the app writes JSON. A Request with both
+// Body and JSON, or a JSON value the app's codec cannot write, fails the test.
+func (s *Server) requestBytes(r Request) []byte {
+	s.tb.Helper()
+	if r.JSON != nil {
+		if r.Body != nil {
+			s.tb.Fatalf("bitetest: the Request to %s %s has both Body and JSON: give JSON for a Go value written as the app writes JSON, or Body for the bytes themselves, not both", r.Method, r.Target)
+		}
+		if hint := bodyWrapper(r.JSON); hint != "" {
+			s.tb.Fatalf("bitetest: the JSON of the Request to %s %s is a %T, a Body type of bites and not a JSON value: %s", r.Method, r.Target, r.JSON, hint)
+		}
+		b, err := testcodec.Encode(s.app, r.JSON)
+		if err != nil {
+			s.tb.Fatalf("bitetest: writing the JSON of the Request to %s %s, a %T, as the app writes JSON: %v; send hand-written JSON in Body instead", r.Method, r.Target, r.JSON, err)
+		}
+		r.Body = b
+		if !hasHeader(r.Header, "Content-Type") {
+			h := make(map[string][]string, len(r.Header)+1)
+			for k, v := range r.Header {
+				h[k] = v
+			}
+			h["Content-Type"] = []string{"application/json"}
+			r.Header = h
+		}
+	}
+	return wireBytes(r)
+}
+
+// bodyWrapper says what to send instead when v is one of the Body types of bites that wrap or
+// replace a JSON value, whose own fields would otherwise be written ({"value":...}); "" for any
+// other value.
+func bodyWrapper(v any) string {
+	t := reflect.TypeOf(v)
+	if t.PkgPath() != "github.com/nevindra/bites" {
+		return ""
+	}
+	name := t.Name()
+	switch {
+	case strings.HasPrefix(name, "Raw["):
+		return "give the value it decodes, in.Body.Value, as JSON"
+	case strings.HasPrefix(name, "Form["), strings.HasPrefix(name, "Submitted["):
+		return "a form is not JSON: send the encoded form (url.Values.Encode) in Body with Content-Type application/x-www-form-urlencoded"
+	case strings.HasPrefix(name, "Multipart["), name == "Upload", name == "BodyReader":
+		return "an upload is not JSON: send the bytes in Body with their Content-Type"
+	}
+	return ""
+}
+
+// hasHeader reports whether h has a field called name, in any case.
+func hasHeader(h map[string][]string, name string) bool {
+	for k := range h {
+		if strings.EqualFold(k, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// wireBytes is r on the wire, its body as Body holds it.
+func wireBytes(r Request) []byte {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "%s %s HTTP/1.1\r\n", r.Method, r.Target)
 	has := map[string]bool{}

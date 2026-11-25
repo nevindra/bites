@@ -30,29 +30,32 @@ type problem struct {
 	Errors []struct{ Location, Message string }
 }
 
-func authed(t testing.TB, method, target, body string) bitetest.Request {
-	r := bitetest.Request{Method: method, Target: target, Header: map[string][]string{
+// authed is a request with a valid token; body, when not nil, is sent as JSON.
+func authed(t testing.TB, method, target string, body any) bitetest.Request {
+	return bitetest.Request{Method: method, Target: target, JSON: body, Header: map[string][]string{
 		"Authorization": {"Bearer " + mint(t, time.Now().Add(time.Hour))},
-		"Content-Type":  {"application/json"},
 	}}
-	if body != "" {
-		r.Body = []byte(body)
-	}
-	return r
+}
+
+// product is the Body of POST /products and PUT /products/{id}.
+func product(name, sku string, price float64) any {
+	var in CreateProduct
+	in.Body.Name, in.Body.SKU, in.Body.Price = ProductName(name), SKU(sku), Price(price)
+	return in.Body
 }
 
 func TestTheAppRegisters(t *testing.T) {
 	start(t)
 }
 
-func create(t *testing.T, srv *bitetest.Server, body string) bitetest.Response {
+func create(t *testing.T, srv *bitetest.Server, body any) bitetest.Response {
 	t.Helper()
 	return srv.Do(authed(t, "POST", "/products", body))
 }
 
 func TestCreatingAProductAnswers201WithALocation(t *testing.T) {
 	srv, _ := start(t)
-	resp := create(t, srv, `{"name":"Lamp","sku":"LMP-0001","price":19.5}`)
+	resp := create(t, srv, product("Lamp", "LMP-0001", 19.5))
 	if resp.Status != 201 || resp.Get("Location") != "/products/1" {
 		t.Fatalf("%d %s %v", resp.Status, resp.Text(), resp.Header)
 	}
@@ -64,7 +67,7 @@ func TestCreatingAProductAnswers201WithALocation(t *testing.T) {
 
 func TestABadSkuNameAndPriceAreAll400sNamingTheirFields(t *testing.T) {
 	srv, _ := start(t)
-	resp := create(t, srv, `{"name":"L","sku":"lmp1","price":0}`)
+	resp := create(t, srv, product("L", "lmp1", 0))
 	if resp.Status != 400 {
 		t.Fatalf("%d %s", resp.Status, resp.Text())
 	}
@@ -81,8 +84,7 @@ func TestABadSkuNameAndPriceAreAll400sNamingTheirFields(t *testing.T) {
 func TestAWriteWithoutATokenIs401(t *testing.T) {
 	srv, _ := start(t)
 	resp := srv.Do(bitetest.Request{Method: "POST", Target: "/products",
-		Header: map[string][]string{"Content-Type": {"application/json"}},
-		Body:   []byte(`{"name":"Lamp","sku":"LMP-0001","price":19.5}`)})
+		JSON: product("Lamp", "LMP-0001", 19.5)})
 	if resp.Status != 401 || !strings.HasPrefix(resp.Get("WWW-Authenticate"), "Bearer") {
 		t.Fatalf("%d %s %v", resp.Status, resp.Text(), resp.Header)
 	}
@@ -90,7 +92,7 @@ func TestAWriteWithoutATokenIs401(t *testing.T) {
 
 func TestAnExpiredTokenIs401InvalidToken(t *testing.T) {
 	srv, _ := start(t)
-	r := authed(t, "DELETE", "/products/1", "")
+	r := authed(t, "DELETE", "/products/1", nil)
 	r.Header["Authorization"] = []string{"Bearer " + mint(t, time.Now().Add(-time.Hour))}
 	resp := srv.Do(r)
 	if resp.Status != 401 || !strings.Contains(resp.Get("WWW-Authenticate"), "invalid_token") {
@@ -117,7 +119,7 @@ func TestAProductIdThatIsNotANumberIsA400NamingPathId(t *testing.T) {
 
 func TestADuplicateSkuIs409(t *testing.T) {
 	srv, _ := start(t)
-	body := `{"name":"Lamp","sku":"LMP-0001","price":19.5}`
+	body := product("Lamp", "LMP-0001", 19.5)
 	if r := create(t, srv, body); r.Status != 201 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -128,10 +130,10 @@ func TestADuplicateSkuIs409(t *testing.T) {
 
 func TestListingPagesAndFiltersByName(t *testing.T) {
 	srv, _ := start(t)
-	for _, b := range []string{
-		`{"name":"Desk lamp","sku":"LMP-0001","price":10}`,
-		`{"name":"Floor lamp","sku":"LMP-0002","price":20}`,
-		`{"name":"Chair","sku":"CHR-0001","price":30}`,
+	for _, b := range []any{
+		product("Desk lamp", "LMP-0001", 10),
+		product("Floor lamp", "LMP-0002", 20),
+		product("Chair", "CHR-0001", 30),
 	} {
 		create(t, srv, b)
 	}
@@ -152,20 +154,20 @@ func TestListingPagesAndFiltersByName(t *testing.T) {
 
 func TestUpdatingAndDeletingAProduct(t *testing.T) {
 	srv, _ := start(t)
-	create(t, srv, `{"name":"Lamp","sku":"LMP-0001","price":19.5}`)
-	create(t, srv, `{"name":"Chair","sku":"CHR-0001","price":30}`)
+	create(t, srv, product("Lamp", "LMP-0001", 19.5))
+	create(t, srv, product("Chair", "CHR-0001", 30))
 
-	resp := srv.Do(authed(t, "PUT", "/products/1", `{"name":"Lamp 2","sku":"LMP-0001","price":25}`))
+	resp := srv.Do(authed(t, "PUT", "/products/1", product("Lamp 2", "LMP-0001", 25)))
 	if resp.Status != 200 || bitetest.JSON[Product](t, resp).Name != "Lamp 2" {
 		t.Fatalf("%d %s", resp.Status, resp.Text())
 	}
-	if r := srv.Do(authed(t, "PUT", "/products/1", `{"name":"Lamp 2","sku":"CHR-0001","price":25}`)); r.Status != 409 {
+	if r := srv.Do(authed(t, "PUT", "/products/1", product("Lamp 2", "CHR-0001", 25))); r.Status != 409 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
-	if r := srv.Do(authed(t, "PUT", "/products/9", `{"name":"Lamp 2","sku":"ZZZ-0001","price":25}`)); r.Status != 404 {
+	if r := srv.Do(authed(t, "PUT", "/products/9", product("Lamp 2", "ZZZ-0001", 25))); r.Status != 404 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
-	if r := srv.Do(authed(t, "DELETE", "/products/1", "")); r.Status != 204 {
+	if r := srv.Do(authed(t, "DELETE", "/products/1", nil)); r.Status != 204 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
 	if r := srv.Do(bitetest.Request{Method: "GET", Target: "/products/1"}); r.Status != 404 {

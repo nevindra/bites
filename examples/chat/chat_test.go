@@ -37,11 +37,26 @@ func start(t *testing.T) (*bitetest.Server, *fakeStore, *Hub) {
 }
 
 func auth(name string) map[string][]string {
-	return map[string][]string{"Authorization": {"Bearer toy-" + name}, "Content-Type": {"application/json"}}
+	return map[string][]string{"Authorization": {"Bearer toy-" + name}}
 }
 
-func post(srv *bitetest.Server, target, user, body string) bitetest.Response {
-	return srv.Do(bitetest.Request{Method: "POST", Target: target, Header: auth(user), Body: []byte(body)})
+// post sends body as JSON as user.
+func post(srv *bitetest.Server, target, user string, body any) bitetest.Response {
+	return srv.Do(bitetest.Request{Method: "POST", Target: target, Header: auth(user), JSON: body})
+}
+
+// room is the Body of POST /rooms.
+func room(name string) any {
+	var in CreateRoom
+	in.Body.Name = roomName(name)
+	return in.Body
+}
+
+// message is the Body of POST /rooms/{id}/messages.
+func message(text string) any {
+	var in PostMessage
+	in.Body.Text = messageText(text)
+	return in.Body
 }
 
 func get(srv *bitetest.Server, target string) bitetest.Response {
@@ -54,7 +69,7 @@ func TestTheAppRegisters(t *testing.T) {
 
 func TestACreatedRoomAnswers201WithItsLocation(t *testing.T) {
 	srv, _, _ := start(t)
-	r := post(srv, "/rooms", "ada", `{"name":"general"}`)
+	r := post(srv, "/rooms", "ada", room("general"))
 	if r.Status != 201 || r.Get("location") != "/rooms/1" {
 		t.Fatalf("%d %v %s", r.Status, r.Header, r.Text())
 	}
@@ -66,8 +81,8 @@ func TestACreatedRoomAnswers201WithItsLocation(t *testing.T) {
 
 func TestARoomNameThatIsTakenIs409(t *testing.T) {
 	srv, _, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
-	r := post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
+	r := post(srv, "/rooms", "ada", room("general"))
 	want := `{"title":"Conflict","status":409,"detail":"a room with that name exists"}`
 	if r.Status != 409 || withoutID(r) != want {
 		t.Fatalf("%d %s", r.Status, r.Text())
@@ -76,7 +91,7 @@ func TestARoomNameThatIsTakenIs409(t *testing.T) {
 
 func TestARoomNameThatIsTooShortIsA400NamingBodyName(t *testing.T) {
 	srv, _, _ := start(t)
-	r := post(srv, "/rooms", "ada", `{"name":"x"}`)
+	r := post(srv, "/rooms", "ada", room("x"))
 	if r.Status != 400 || r.Get("content-type") != "application/problem+json" || !strings.Contains(r.Text(), `"location":"body.name"`) {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -84,13 +99,12 @@ func TestARoomNameThatIsTooShortIsA400NamingBodyName(t *testing.T) {
 
 func TestACallerWithoutATokenIs401AndATokenThatIsNotToyIs401(t *testing.T) {
 	srv, _, _ := start(t)
-	r := srv.Do(bitetest.Request{Method: "POST", Target: "/rooms", Body: []byte(`{"name":"general"}`),
-		Header: map[string][]string{"Content-Type": {"application/json"}}})
+	r := srv.Do(bitetest.Request{Method: "POST", Target: "/rooms", JSON: room("general")})
 	if r.Status != 401 || r.Get("www-authenticate") == "" {
 		t.Fatalf("%d %v %s", r.Status, r.Header, r.Text())
 	}
-	r = srv.Do(bitetest.Request{Method: "POST", Target: "/rooms", Body: []byte(`{"name":"general"}`),
-		Header: map[string][]string{"Content-Type": {"application/json"}, "Authorization": {"Bearer nope"}}})
+	r = srv.Do(bitetest.Request{Method: "POST", Target: "/rooms", JSON: room("general"),
+		Header: map[string][]string{"Authorization": {"Bearer nope"}}})
 	if r.Status != 401 || !strings.Contains(r.Get("www-authenticate"), "invalid_token") {
 		t.Fatalf("%d %v", r.Status, r.Header)
 	}
@@ -99,7 +113,7 @@ func TestACallerWithoutATokenIs401AndATokenThatIsNotToyIs401(t *testing.T) {
 func TestAStoreThatFailsIsA500ThatDoesNotLeakTheReason(t *testing.T) {
 	srv, store, _ := start(t)
 	store.fail = errors.New("connection refused by 10.1.2.3")
-	r := post(srv, "/rooms", "ada", `{"name":"general"}`)
+	r := post(srv, "/rooms", "ada", room("general"))
 	if r.Status != 500 || strings.Contains(r.Text(), "10.1.2.3") {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -108,7 +122,7 @@ func TestAStoreThatFailsIsA500ThatDoesNotLeakTheReason(t *testing.T) {
 func TestRoomsArePagedWithACursor(t *testing.T) {
 	srv, _, _ := start(t)
 	for _, n := range []string{"alpha", "bravo", "charlie"} {
-		post(srv, "/rooms", "ada", `{"name":"`+n+`"}`)
+		post(srv, "/rooms", "ada", room(n))
 	}
 	var page RoomPage
 	if r := get(srv, "/rooms?limit=2"); r.Status != 200 || r.JSON(&page) != nil || len(page.Items) != 2 || page.Next == nil || *page.Next != 2 {
@@ -137,8 +151,8 @@ func TestAPageLimitOverTheMaximumIsA400NamingQueryLimit(t *testing.T) {
 
 func TestAMessageIsStoredWithItsAuthorFromTheToken(t *testing.T) {
 	srv, _, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
-	r := post(srv, "/rooms/1/messages", "grace", `{"text":"hello"}`)
+	post(srv, "/rooms", "ada", room("general"))
+	r := post(srv, "/rooms/1/messages", "grace", message("hello"))
 	var m Message
 	if r.Status != 201 || r.JSON(&m) != nil || m.Author != "grace" || m.Text != "hello" || m.RoomID != 1 {
 		t.Fatalf("%d %s", r.Status, r.Text())
@@ -147,13 +161,13 @@ func TestAMessageIsStoredWithItsAuthorFromTheToken(t *testing.T) {
 
 func TestABlankMessageIsA400NamingBodyText(t *testing.T) {
 	srv, _, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
-	r := post(srv, "/rooms/1/messages", "ada", `{"text":"   "}`)
+	post(srv, "/rooms", "ada", room("general"))
+	r := post(srv, "/rooms/1/messages", "ada", message("   "))
 	want := `{"title":"Bad Request","status":400,"errors":[{"location":"body.text","message":"must not be blank"}]}`
 	if r.Status != 400 || withoutID(r) != want {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
-	r = post(srv, "/rooms/1/messages", "ada", `{"text":""}`)
+	r = post(srv, "/rooms/1/messages", "ada", message(""))
 	if r.Status != 400 || !strings.Contains(r.Text(), `"location":"body.text"`) {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -161,7 +175,7 @@ func TestABlankMessageIsA400NamingBodyText(t *testing.T) {
 
 func TestAMessageInARoomThatDoesNotExistIs404(t *testing.T) {
 	srv, _, _ := start(t)
-	r := post(srv, "/rooms/7/messages", "ada", `{"text":"hello"}`)
+	r := post(srv, "/rooms/7/messages", "ada", message("hello"))
 	if r.Status != 404 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -172,9 +186,9 @@ func TestAMessageInARoomThatDoesNotExistIs404(t *testing.T) {
 
 func TestHistoryIsNewestFirstAndPaged(t *testing.T) {
 	srv, _, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
 	for _, text := range []string{"one", "two", "three"} {
-		post(srv, "/rooms/1/messages", "ada", `{"text":"`+text+`"}`)
+		post(srv, "/rooms/1/messages", "ada", message(text))
 	}
 	var page MessagePage
 	if r := get(srv, "/rooms/1/messages?limit=2"); r.JSON(&page) != nil || len(page.Items) != 2 ||
@@ -190,8 +204,8 @@ func TestHistoryIsNewestFirstAndPaged(t *testing.T) {
 
 func TestEverySocketInTheRoomHearsAMessageAndTheSenderToo(t *testing.T) {
 	srv, _, hub := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
-	post(srv, "/rooms", "ada", `{"name":"random"}`)
+	post(srv, "/rooms", "ada", room("general"))
+	post(srv, "/rooms", "ada", room("random"))
 	ada := srv.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("ada")})
 	grace := srv.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("grace")})
 	other := srv.DialWS(bitetest.WSRequest{Target: "/rooms/2/ws", Header: auth("linus")})
@@ -205,7 +219,7 @@ func TestEverySocketInTheRoomHearsAMessageAndTheSenderToo(t *testing.T) {
 		}
 	}
 
-	post(srv, "/rooms/1/messages", "grace", `{"text":"from http"}`) // the HTTP route reaches the sockets too
+	post(srv, "/rooms/1/messages", "grace", message("from http")) // the HTTP route reaches the sockets too
 	var f Frame
 	grace.ReadJSON(&f)
 	if f.Message == nil || f.Message.Text != "from http" || f.Message.Author != "grace" {
@@ -220,7 +234,7 @@ func TestEverySocketInTheRoomHearsAMessageAndTheSenderToo(t *testing.T) {
 
 func TestAnInvalidSocketMessageIsAnErrorFrameAndTheSocketStaysOpen(t *testing.T) {
 	srv, store, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
 	ws := srv.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("ada")})
 	for _, bad := range []string{`{"text":"   "}`, `not json`} {
 		ws.SendText(bad)
@@ -243,7 +257,7 @@ func TestAnInvalidSocketMessageIsAnErrorFrameAndTheSocketStaysOpen(t *testing.T)
 
 func TestASocketForARoomThatDoesNotExistOrWithoutATokenIsRefusedBeforeTheUpgrade(t *testing.T) {
 	srv, _, _ := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
 	if _, r := srv.TryDialWS(bitetest.WSRequest{Target: "/rooms/9/ws", Header: auth("ada")}); r.Status != 404 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -257,12 +271,12 @@ func TestASocketForARoomThatDoesNotExistOrWithoutATokenIsRefusedBeforeTheUpgrade
 
 func TestADroppedSocketLeavesNoTopicBehindOnTheNextDelivery(t *testing.T) {
 	srv, _, hub := start(t)
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
 	ws := srv.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("ada")})
 	ws.Close(1000, "bye")
 	ws.ExpectClose(1000)
 	ws.ExpectEOF()
-	post(srv, "/rooms/1/messages", "ada", `{"text":"anyone?"}`)
+	post(srv, "/rooms/1/messages", "ada", message("anyone?"))
 	if hub.Rooms() != 0 {
 		t.Fatalf("rooms with a topic: %d", hub.Rooms())
 	}
@@ -317,7 +331,7 @@ func TestBehindAProxyThatStripsAPrefixTheLocationAndTheDocumentsServersCarryTheP
 		t.Fatal(err)
 	}
 	srv := bitetest.Start(t, newApp(cfg, &fakeStore{}, NewHub(quiet, bitetest.NewBroker()), quiet))
-	if r := post(srv, "/rooms", "ada", `{"name":"general"}`); r.Status != 201 || r.Get("location") != "/chat/rooms/1" {
+	if r := post(srv, "/rooms", "ada", room("general")); r.Status != 201 || r.Get("location") != "/chat/rooms/1" {
 		t.Fatalf("%d %v", r.Status, r.Header)
 	}
 	var doc struct {
@@ -372,7 +386,7 @@ func TestAGapInTheBrokerTellsTheSocketsOfThatInstanceToReadTheHistoryAgain(t *te
 	broker := bitetest.NewBroker()
 	hub := NewHub(quiet, broker)
 	srv := bitetest.Start(t, newApp(testConfig(), &fakeStore{}, hub, quiet))
-	post(srv, "/rooms", "ada", `{"name":"general"}`)
+	post(srv, "/rooms", "ada", room("general"))
 	ada := srv.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("ada")})
 	for broker.Subscriptions("room.1") == 0 {
 		time.Sleep(time.Millisecond)
@@ -390,13 +404,13 @@ func TestAMessagePostedOnAnotherInstanceReachesThisInstancesSocketsOnce(t *testi
 	store := &fakeStore{}
 	here := bitetest.Start(t, newApp(testConfig(), store, NewHub(quiet, broker), quiet))
 	there := bitetest.Start(t, newApp(testConfig(), store, NewHub(quiet, broker.Peer()), quiet))
-	post(here, "/rooms", "ada", `{"name":"general"}`)
+	post(here, "/rooms", "ada", room("general"))
 	ada := here.DialWS(bitetest.WSRequest{Target: "/rooms/1/ws", Header: auth("ada")})
 	for broker.Subscriptions("room.1") == 0 {
 		time.Sleep(time.Millisecond)
 	}
-	post(there, "/rooms/1/messages", "grace", `{"text":"from afar"}`)
-	post(there, "/rooms/1/messages", "grace", `{"text":"second"}`)
+	post(there, "/rooms/1/messages", "grace", message("from afar"))
+	post(there, "/rooms/1/messages", "grace", message("second"))
 	var f Frame
 	ada.ReadJSON(&f)
 	if f.Message == nil || f.Message.Text != "from afar" {

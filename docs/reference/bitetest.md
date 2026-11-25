@@ -121,6 +121,7 @@ type Request struct {
 	Target string
 	Header map[string][]string
 	Body   []byte
+	JSON   any
 	// Remote is the client address the server sees; "203.0.113.9:4000" if empty.
 	Remote string
 }
@@ -130,7 +131,8 @@ Request is one request to send.
 
 - `Method` and `Target` make the request line (`GET /users/42?expand=true`).
 - `Header` gives the header fields in the shape `Response.Header` has: a name with several values is sent as that many lines (`{"Authorization": {"Bearer " + token}}`). `Host` is `test` unless `Header` gives it.
-- `Body` is the request body. `Content-Length` is set from it unless `Header` gives `Content-Length` or `Transfer-Encoding`.
+- `Body` is the request body as bytes: JSON that is deliberately broken, a literal `null`, a form, anything that is not JSON. `Content-Length` is set from the body unless `Header` gives `Content-Length` or `Transfer-Encoding`.
+- `JSON` is the request body as a Go value, usually the value of the route's Body section, written as a client of the app writes it: with the app's own codec and naming policy, as [`WS.SendJSON`](#bitetestwssendjson) writes a message, so a struct with no `json` tags arrives under the route's wire names, an absent `Opt` is left out and a `Null` is written as the app writes it; a map is written with its keys as they are, and a tagged union by its variant. `Content-Type` is `application/json` unless `Header` gives one. A nil `JSON` sends no body. A Request with both `Body` and `JSON` fails the test (`bitetest: the Request to POST /orders has both Body and JSON: give JSON for a Go value written as the app writes JSON, or Body for the bytes themselves, not both`), and so does a value the app's codec cannot write, a type with a channel or func field, with the reason and `send hand-written JSON in Body instead`, and a Body type of bites that is not a JSON value: a `Raw[T]` (give `in.Body.Value`), a `Form[T]` or `Submitted[T]` (send the encoded form in `Body`), a `Multipart[T]`, an `Upload` or a `BodyReader`. `Do` and `OpenEvents` both send it.
 - `Remote` is the client address the server sees; `203.0.113.9:4000` when empty.
 
 ### `bitetest.Response`

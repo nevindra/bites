@@ -29,8 +29,9 @@ func TestTheREADMEsRoutesRegisterAndAnswer(t *testing.T) {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
 
-	r = srv.Do(bitetest.Request{Method: "POST", Target: "/users", Body: []byte(`{"name":"Grace"}`),
-		Header: map[string][]string{"Content-Type": {"application/json"}}})
+	var create CreateUser
+	create.Body.Name = "Grace"
+	r = srv.Do(bitetest.Request{Method: "POST", Target: "/users", JSON: create.Body})
 	if r.Status != 201 || r.Get("location") != "/users/2" || r.Text() != `{"id":2,"name":"Grace"}` {
 		t.Fatalf("%d %v %s", r.Status, r.Header, r.Text())
 	}

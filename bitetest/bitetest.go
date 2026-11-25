@@ -149,8 +149,9 @@ func (s *Server) explain(err error) error {
 		"the listener open for the delay after Shutdown is called, and send them during it", err)
 }
 
-// Request is one request to send. Host is "test" and Content-Length is set from Body unless Header
-// gives them.
+// Request is one request to send. Host is "test" and Content-Length is set from the body unless
+// Header gives them. A JSON body is given as a Go value in JSON; Body is for the bytes themselves,
+// such as JSON that is deliberately broken or a body that is not JSON.
 type Request struct {
 	// Method is the HTTP method, such as GET.
 	Method string
@@ -159,8 +160,19 @@ type Request struct {
 	// Header holds the header fields to send, as Response.Header holds them: a name sent with
 	// several values is sent as that many lines. Host is "test" unless set here.
 	Header map[string][]string
-	// Body is the request body; Content-Length is set from it unless Header sets it.
+	// Body is the request body as bytes; Content-Length is set from it unless Header sets it.
+	// Give Body or JSON, not both: a Request with both fails the test.
 	Body []byte
+	// JSON is the request body as a Go value, usually the value of the route's Body section, written
+	// as a client of the app writes it: with the app's own codec and naming policy (ADR 0074), so a
+	// struct with no json tags arrives under the wire names the route reads ({"customer_name":...}
+	// under SnakeCase), and a bites.Opt that is absent is left out. A map is written with its keys
+	// as they are, and a tagged union by its variant. Content-Type is application/json unless
+	// Header gives one. nil sends no body; send a literal null, or any JSON a Go value cannot
+	// express, in Body. A value the app's codec cannot write (a type with a channel or func field)
+	// fails the test with the reason, and so does a Body type of bites that is not a JSON value
+	// (a Raw, whose Value is what to give, a Form, an Upload).
+	JSON any
 	// Remote is the client address the server sees; "203.0.113.9:4000" if empty.
 	Remote string
 }
@@ -236,9 +248,9 @@ func (r Response) Get(name string) string {
 // on the rest of the body.
 func (s *Server) Do(r Request) Response {
 	s.tb.Helper()
+	req := s.requestBytes(r)
 	c := s.Dial(remoteOf(r))
 	defer c.Close()
-	req := requestBytes(r)
 	written := make(chan error, 1)
 	go func() {
 		_, err := c.Write(req)

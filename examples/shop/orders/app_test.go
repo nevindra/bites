@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nevindra/bites"
 	"github.com/nevindra/bites/bitetest"
 )
 
@@ -46,17 +47,26 @@ type problem struct {
 	Errors []struct{ Location, Message string }
 }
 
-func post(srv *bitetest.Server, target, body string) bitetest.Response {
-	return srv.Do(bitetest.Request{Method: "POST", Target: target, Header: map[string][]string{"Content-Type": {"application/json"}}, Body: []byte(body)})
+// order is the Body of POST /orders, sent as JSON the way the app writes it.
+func order(customer string, items ...Item) any {
+	var in CreateOrder
+	in.Body.Customer, in.Body.Items = bites.NonEmpty(customer), Items(items)
+	if in.Body.Items == nil {
+		in.Body.Items = Items{}
+	}
+	return in.Body
 }
 
-func put(srv *bitetest.Server, target, body string) bitetest.Response {
-	return srv.Do(bitetest.Request{Method: "PUT", Target: target, Header: map[string][]string{"Content-Type": {"application/json"}}, Body: []byte(body)})
+// status is the Body of PUT /orders/{id}/status.
+func status(s Status) any {
+	var in SetStatus
+	in.Body.Status = s
+	return in.Body
 }
 
 func newOrder(t *testing.T, srv *bitetest.Server) Order {
 	t.Helper()
-	r := post(srv, "/orders", `{"customer":"Ada","items":[{"product_id":1,"qty":2}]}`)
+	r := srv.Do(bitetest.Request{Method: "POST", Target: "/orders", JSON: order("Ada", Item{ProductID: 1, Qty: 2})})
 	if r.Status != 201 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -73,7 +83,7 @@ func TestCreatingAnOrderChecksEachProductWithCatalog(t *testing.T) {
 
 func TestAProductCatalogDoesNotKnowIsRefusedNamingTheItem(t *testing.T) {
 	srv := start(t)
-	r := post(srv, "/orders", `{"customer":"Ada","items":[{"product_id":1,"qty":2},{"product_id":42,"qty":1}]}`)
+	r := srv.Do(bitetest.Request{Method: "POST", Target: "/orders", JSON: order("Ada", Item{ProductID: 1, Qty: 2}, Item{ProductID: 42, Qty: 1})})
 	p := bitetest.JSON[struct {
 		Errors []struct{ Location, Message string }
 	}](t, r)
@@ -84,7 +94,7 @@ func TestAProductCatalogDoesNotKnowIsRefusedNamingTheItem(t *testing.T) {
 
 func TestACatalogFailureIs502(t *testing.T) {
 	srv := start(t)
-	r := post(srv, "/orders", `{"customer":"Ada","items":[{"product_id":500,"qty":2}]}`)
+	r := srv.Do(bitetest.Request{Method: "POST", Target: "/orders", JSON: order("Ada", Item{ProductID: 500, Qty: 2})})
 	if r.Status != 502 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -92,7 +102,7 @@ func TestACatalogFailureIs502(t *testing.T) {
 
 func TestABadOrderBodyIsA400NamingEveryField(t *testing.T) {
 	srv := start(t)
-	r := post(srv, "/orders", `{"customer":"","items":[{"product_id":1,"qty":0}]}`)
+	r := srv.Do(bitetest.Request{Method: "POST", Target: "/orders", JSON: order("", Item{ProductID: 1, Qty: 0})})
 	p := bitetest.JSON[problem](t, r)
 	var locs []string
 	for _, e := range p.Errors {
@@ -101,7 +111,7 @@ func TestABadOrderBodyIsA400NamingEveryField(t *testing.T) {
 	if r.Status != 400 || strings.Join(locs, ",") != "body.customer,body.items[0].qty" {
 		t.Fatalf("%d %v %s", r.Status, locs, r.Text())
 	}
-	r = post(srv, "/orders", `{"customer":"Ada","items":[]}`)
+	r = srv.Do(bitetest.Request{Method: "POST", Target: "/orders", JSON: order("Ada")})
 	if r.Status != 400 || !strings.Contains(r.Text(), "body.items") {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -112,7 +122,7 @@ func TestAMissingOrderIs404(t *testing.T) {
 	if r := srv.Do(bitetest.Request{Method: "GET", Target: "/orders/9"}); r.Status != 404 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
-	if r := put(srv, "/orders/9/status", `{"status":"paid"}`); r.Status != 404 {
+	if r := srv.Do(bitetest.Request{Method: "PUT", Target: "/orders/9/status", JSON: status("paid")}); r.Status != 404 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
 }
@@ -120,7 +130,7 @@ func TestAMissingOrderIs404(t *testing.T) {
 func TestAStatusThatIsNotOneOfTheValuesIsA400(t *testing.T) {
 	srv := start(t)
 	newOrder(t, srv)
-	r := put(srv, "/orders/1/status", `{"status":"lost"}`)
+	r := srv.Do(bitetest.Request{Method: "PUT", Target: "/orders/1/status", JSON: status("lost")})
 	if r.Status != 400 || !strings.Contains(r.Text(), "body.status") {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
@@ -132,7 +142,7 @@ func TestAStatusChangeReachesTheSocketsWatchingTheOrder(t *testing.T) {
 	ws := srv.DialWS(bitetest.WSRequest{Target: "/orders/1/ws"})
 	other := srv.DialWS(bitetest.WSRequest{Target: "/orders/1/ws"})
 
-	if r := put(srv, "/orders/1/status", `{"status":"paid"}`); r.Status != 200 {
+	if r := srv.Do(bitetest.Request{Method: "PUT", Target: "/orders/1/status", JSON: status("paid")}); r.Status != 200 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
 	for _, c := range []*bitetest.WS{ws, other} {
@@ -161,7 +171,7 @@ func TestTheEventStreamSendsAStatusChange(t *testing.T) {
 	if c := events.Next(); c.Comment != "open" { // sent once the stream is subscribed
 		t.Fatalf("%+v", c)
 	}
-	put(srv, "/orders/1/status", `{"status":"shipped"}`)
+	srv.Do(bitetest.Request{Method: "PUT", Target: "/orders/1/status", JSON: status("shipped")})
 	if ev := events.Next(); ev.Name != "status" || ev.Data != `{"order_id":1,"status":"shipped"}` {
 		t.Fatalf("%+v", ev)
 	}

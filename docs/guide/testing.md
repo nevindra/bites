@@ -61,7 +61,41 @@ func TestGetUserAnswersTheUser(t *testing.T) {
 }
 ```
 
-A [`bitetest.Request`](../reference/bitetest.md#bitetestrequest) has `Method`, `Target` (the path and query), `Header`, `Body` and `Remote` (the client address the server sees, `203.0.113.9:4000` when empty). `Host` is `test`, and `Content-Length` is set from `Body` unless `Header` gives them. A [`bitetest.Response`](../reference/bitetest.md#bitetestresponse) has `Status`, `Header` (names lower-cased) and `Body`, and three helpers: [`Text`](../reference/bitetest.md#bitetestresponsetext) is the body as a string, [`JSON(&v)`](../reference/bitetest.md#bitetestresponsejson) decodes it, and [`Get(name)`](../reference/bitetest.md#bitetestresponseget) is the first value of a header by any case of its name. [`bitetest.JSON[T](t, resp)`](../reference/bitetest.md#bitetestjson) decodes the body as a `T` and fails the test, with the status and the body, when it does not decode. Both decode with the app's own codec and [naming policy](./requests.md#wire-names), as a client of the app reads the answer, so `User` needs no `json` tags to read back the `id` and `name` the app wrote, and an `Opt`, a `Null` or a tagged union the handler returns reads into the handler's own type, with no second copy of it for the test. The read is lenient: a member `User` has no field for is skipped and a member the answer left out stays zero, so check a value by comparing it. A `map[string]any` or an `any` is read with `encoding/json` instead; compare `Text()` to test the exact wire names. `Do` opens a connection for each call, reads one response, and fails the test if none arrives in five real seconds. On a slower machine, a shared CI runner, set `BITETEST_WAIT=30s` ([`WaitEnv`](../reference/bitetest.md#bitetestwaitenv)) to raise that wait and every other real-time wait of bitetest, without touching the tests; a failure at the default says so.
+A [`bitetest.Request`](../reference/bitetest.md#bitetestrequest) has `Method`, `Target` (the path and query), `Header`, `Body`, `JSON` ([below](#sending-a-json-body)) and `Remote` (the client address the server sees, `203.0.113.9:4000` when empty). `Host` is `test`, and `Content-Length` is set from `Body` unless `Header` gives them. A [`bitetest.Response`](../reference/bitetest.md#bitetestresponse) has `Status`, `Header` (names lower-cased) and `Body`, and three helpers: [`Text`](../reference/bitetest.md#bitetestresponsetext) is the body as a string, [`JSON(&v)`](../reference/bitetest.md#bitetestresponsejson) decodes it, and [`Get(name)`](../reference/bitetest.md#bitetestresponseget) is the first value of a header by any case of its name. [`bitetest.JSON[T](t, resp)`](../reference/bitetest.md#bitetestjson) decodes the body as a `T` and fails the test, with the status and the body, when it does not decode. Both decode with the app's own codec and [naming policy](./requests.md#wire-names), as a client of the app reads the answer, so `User` needs no `json` tags to read back the `id` and `name` the app wrote, and an `Opt`, a `Null` or a tagged union the handler returns reads into the handler's own type, with no second copy of it for the test. The read is lenient: a member `User` has no field for is skipped and a member the answer left out stays zero, so check a value by comparing it. A `map[string]any` or an `any` is read with `encoding/json` instead; compare `Text()` to test the exact wire names. `Do` opens a connection for each call, reads one response, and fails the test if none arrives in five real seconds. On a slower machine, a shared CI runner, set `BITETEST_WAIT=30s` ([`WaitEnv`](../reference/bitetest.md#bitetestwaitenv)) to raise that wait and every other real-time wait of bitetest, without touching the tests; a failure at the default says so.
+
+## Sending a JSON body
+
+**Give the body as a Go value in `JSON`, usually the value of the route's own Body section, and `Do` writes it as a client of the app writes it: with the app's codec and [naming policy](./requests.md#wire-names), and `Content-Type: application/json`.** So the test needs no hand-written JSON string and no header, and a struct with no `json` tags arrives under the names the route reads (`customer_name` under `SnakeCase`); an `Opt` left absent is left out, a `Null` is written as the app writes it ([ADR 0027](../adr/0027-an-in-memory-entry-point-runs-the-engine-path.md)).
+
+<!-- compiles: decls -->
+```go
+type CreateUser struct {
+	Body struct {
+		Name  bites.NonEmpty
+		Email bites.Opt[string]
+	}
+}
+
+func createUser(ctx context.Context, in CreateUser) (bites.Created[User], error) {
+	return bites.Created[User]{Body: User{ID: 8, Name: string(in.Body.Name)}, Location: "/users/8"}, nil
+}
+
+func TestCreatingAUserAnswers201WithItsLocation(t *testing.T) {
+	app := newApp()
+	app.Post("/users", createUser)
+	srv := bitetest.Start(t, app)
+
+	var create CreateUser
+	create.Body.Name = "Grace"
+	resp := srv.Do(bitetest.Request{Method: "POST", Target: "/users", JSON: create.Body})
+
+	if resp.Status != 201 || resp.Get("Location") != "/users/8" {
+		t.Fatalf("%d %s", resp.Status, resp.Text())
+	}
+}
+```
+
+A `Content-Type` in `Header` is kept, for a route that reads another JSON type. A map is written with its keys as they are, for a member no Go type of yours has. **`Body` is for the bytes themselves**: JSON that is deliberately broken (`[]byte(`{"name":`)`), a literal `null`, a form or anything that is not JSON, with its `Content-Type` in `Header`. Giving both `Body` and `JSON` fails the test and says to give one, and a value the app's codec cannot write (a type with a channel or a func field) fails it with the reason. A route whose Body is a `Raw[T]` is sent its `in.Body.Value`; a `Raw` itself, a `Form` or an upload given as `JSON` fails the test and says what to send. A nil `JSON` sends no body.
 
 ## What the app logs
 
