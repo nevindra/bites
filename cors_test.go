@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -447,5 +448,33 @@ func TestAPanicInAMiddlewareOutsideCORSIsA500WithNoCORSHeadersBecauseNothingWasD
 	r := srv.Do(from("http://localhost:5173", "GET", "/users/7"))
 	if r.Status != 500 || len(corsHeaders(r)) != 0 {
 		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+}
+
+func TestAPanicOnARouteBehindALimiterAndIdempotencyCarriesTheCORSHeadersAndGivesBackTheSlotAndTheKey(t *testing.T) {
+	lim := bites.NewConcurrencyLimiter(bites.ConcurrencyOptions{Name: "writes", Limit: 1, NoBacklog: true})
+	idem := bites.NewIdempotency(bites.IdempotencyOptions{})
+	var calls atomic.Int64
+	srv := start(t, func(app *bites.App) {
+		app.Use(bites.CORS(appOrigin))
+		app.Post("/p", func(context.Context, struct{}) (string, error) {
+			if calls.Add(1) == 1 {
+				panic("boom")
+			}
+			return "ok", nil
+		}, bites.Use(lim.Middleware(), idem.Middleware()))
+	})
+	r := from("http://localhost:5173", "POST", "/p", "Idempotency-Key", "k")
+	got := srv.Do(r)
+	wantProblem(t, got, 500, `{"title":"Internal Server Error","status":500}`)
+	if got.Get("access-control-allow-origin") != "http://localhost:5173" || !hasVary(got, "Origin") {
+		t.Fatalf("the 500 after a panic behind a limiter and Idempotency: %v", got.Header)
+	}
+	if s := lim.Stats(); s.Running != 0 || s.ShedFull != 0 {
+		t.Fatalf("the slot of the panicked request was kept: %+v", s)
+	}
+	got = srv.Do(r)
+	if got.Status != 200 || got.Get("access-control-allow-origin") != "http://localhost:5173" {
+		t.Fatalf("the retry after the panic: %d %v %s", got.Status, got.Header, got.Text())
 	}
 }
