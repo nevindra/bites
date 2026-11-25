@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -331,9 +332,14 @@ func TestTheAccessLogPathOptionReplacesThePathOfEveryRecordAndALogThatNeverSawTh
 	srv.Do(req("GET", "/feed/s3cr3t-token"))
 	srv.Do(req("GET", "/users/7"))
 	srv.Do(req("GET", "/feed/another-s3cr3t/missing")) // a 404 under the same prefix is logged hidden too
-	recs := waitRecords(t, srv, lb, 3)
-	got := []any{recs[0]["path"], recs[1]["path"], recs[2]["path"]}
-	if fmt.Sprint(got) != "[/feed/[secret] /users/7 /feed/[secret]]" {
+	// A record is written when its request has really ended, after the client has its answer, so
+	// the records may arrive in any order: the paths are compared as a set.
+	var got []string
+	for _, r := range waitRecords(t, srv, lb, 3) {
+		got = append(got, fmt.Sprint(r["path"]))
+	}
+	slices.Sort(got)
+	if fmt.Sprint(got) != "[/feed/[secret] /feed/[secret] /users/7]" {
 		t.Fatalf("paths logged: %v", got)
 	}
 	if strings.Contains(lb.String(), "s3cr3t") {
