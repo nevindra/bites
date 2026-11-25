@@ -96,20 +96,18 @@ func TestMaxSeriesBoundsTheSeriesAndCountsWhatItDropped(t *testing.T) {
 		app.Get("/b", ok[Empty])
 		app.Get("/c", ok[Empty])
 	})
+	// A series is added at the request's End, which runs after its answer is read, so each
+	// request is let end before the next: otherwise /c could end before /a and take its place.
 	for _, p := range []string{"/a", "/b", "/c", "/c"} {
 		srv.Do(req("GET", p))
+		srv.WaitEnded()
 	}
-	// /c twice, and every scrape, which is a third label set too. Each End runs after its answer,
-	// so the count is read until it has caught up.
-	var text string
-	waitFor(t, "the drops to be counted", func() bool {
-		text = srv.Do(req("GET", "/metrics")).Text()
-		var dropped int
-		fmt.Sscanf(text[strings.LastIndex(text, "bites_metrics_dropped_total "):], "bites_metrics_dropped_total %d", &dropped)
-		return dropped >= 2 && strings.Count(text, "_count{") == 2
-	})
-	if strings.Contains(text, `route="/c"`) {
-		t.Fatalf("%s", text)
+	// /c twice is dropped; the scrape, a third label set too, is dropped only at its own End.
+	text := srv.Do(req("GET", "/metrics")).Text()
+	var dropped int
+	fmt.Sscanf(text[strings.LastIndex(text, "bites_metrics_dropped_total "):], "bites_metrics_dropped_total %d", &dropped)
+	if dropped != 2 || strings.Count(text, "_count{") != 2 || !strings.Contains(text, `route="/a"`) || !strings.Contains(text, `route="/b"`) || strings.Contains(text, `route="/c"`) {
+		t.Fatalf("dropped %d, want 2, with the series of /a and /b only:\n%s", dropped, text)
 	}
 }
 
