@@ -817,6 +817,12 @@ func TestAReassemblyBudgetThatIsSpentClosesTheNextSocketThatSpillsWith1013AndIts
 	chunk := []byte(strings.Repeat("a", 8000))
 	first := memWS(t, srv, "/rooms/1")
 	first.write(false, ws.OpText, chunk) // 8,000 bytes: past the free 4 KiB, 16 KiB charged
+	// Each socket is read on its own goroutine, so the second's fragment could be read first and
+	// take the budget; the pong shows the server has read and charged the first's.
+	first.write(true, ws.OpPing, []byte("sync"))
+	if op, _ := first.next(); op != ws.OpPong {
+		t.Fatalf("opcode %d", op)
+	}
 	second := memWS(t, srv, "/rooms/2")
 	second.write(false, ws.OpText, chunk)
 	second.expectClose(1013)
