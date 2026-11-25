@@ -51,12 +51,13 @@ func TestAMessagePostedOnOneInstanceReachesTheSocketsOfBothThroughTheBroker(t *t
 	}
 	srv, other := instance(), instance()
 	name := fmt.Sprintf("it-%d", time.Now().UnixNano())
-	r := post(srv, "/rooms", "ada", `{"name":"`+name+`"}`)
+	create := room(name) // the Body of POST /rooms; made here because the Room below takes the name room
+	r := post(srv, "/rooms", "ada", create)
 	var room Room
 	if r.Status != 201 || r.JSON(&room) != nil || room.ID == 0 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
-	if r = post(srv, "/rooms", "ada", `{"name":"`+name+`"}`); r.Status != 409 {
+	if r = post(srv, "/rooms", "ada", create); r.Status != 409 {
 		t.Fatalf("duplicate: %d %s", r.Status, r.Text())
 	}
 
@@ -73,7 +74,7 @@ func TestAMessagePostedOnOneInstanceReachesTheSocketsOfBothThroughTheBroker(t *t
 		}
 	}
 
-	if r = post(other, fmt.Sprintf("/rooms/%d/messages", room.ID), "grace", `{"text":"over http, with \"quotes\" and é"}`); r.Status != 201 {
+	if r = post(other, fmt.Sprintf("/rooms/%d/messages", room.ID), "grace", message("over http, with \"quotes\" and é")); r.Status != 201 {
 		t.Fatalf("%d %s", r.Status, r.Text())
 	}
 	for _, ws := range []*bitetest.WS{ada, grace} {
@@ -88,7 +89,7 @@ func TestAMessagePostedOnOneInstanceReachesTheSocketsOfBothThroughTheBroker(t *t
 	if r = get(srv, fmt.Sprintf("/rooms/%d/messages", room.ID)); r.JSON(&page) != nil || len(page.Items) != 2 || page.Items[0].Author != "grace" {
 		t.Fatalf("%s", r.Text())
 	}
-	if r = post(srv, "/rooms/9223372036854775807/messages", "ada", `{"text":"x"}`); r.Status != 404 {
+	if r = post(srv, "/rooms/9223372036854775807/messages", "ada", message("x")); r.Status != 404 {
 		t.Fatalf("a room that is not there: %d %s", r.Status, r.Text())
 	}
 }
