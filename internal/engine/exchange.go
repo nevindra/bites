@@ -52,7 +52,7 @@ type Exchange struct {
 	slabSize   int  // what the slab will be made with, until the first call of Slab
 	slabReady  bool // the slab has its buffer
 	reqID      string
-	ws         *WS    // the WebSocket the route is opening, between NewWS and the end of the request (ws.go)
+	ws         *WS // the WebSocket the route is opening, between NewWS and the end of the request (ws.go)
 
 	// What an Observer is told when the request has ended (ADR 0051): set by the framework with
 	// Observe, and counted by the engine as the body is read and the answer written.
