@@ -413,17 +413,23 @@ func TestBeforeShutdownRunsAfterReadinessFailsAndBeforeTheShutdownDelayAndTheLis
 	clk := bitetest.NewClock()
 	var ready, other, delayStarted int
 	var srv *bitetest.Server
+	probed := make(chan struct{})
 	app := bites.New(bites.WithClock(clk), bites.WithHealth(bites.Health{Live: "/livez", Ready: "/readyz"}), bites.WithShutdownDelay(5*time.Second))
 	app.Get("/orders", func(context.Context, Empty) (struct{}, error) { return struct{}{}, nil })
 	app.Service(bites.Service{Name: "registry", BeforeShutdown: func(context.Context) error {
 		delayStarted = clk.Pending()
 		ready = srv.Do(req("GET", "/readyz")).Status
 		other = srv.Do(req("GET", "/orders")).Status
+		close(probed)
 		return nil
 	}})
 	srv = bitetest.Start(t, app)
 	done := make(chan error, 1)
 	go func() { done <- app.Shutdown(shutdownCtx(t)) }()
+	// The two probes' connections keep read deadlines on clk until the server has closed them,
+	// after Do returns; once they are closed the only timer left to wait for is the delay's.
+	svcWithin(t, "BeforeShutdown", func() { <-probed })
+	srv.WaitEnded()
 	svcEventually(t, "the delay", func() bool { return clk.Pending() > 0 })
 	clk.Advance(5 * time.Second)
 	if err := <-done; err != nil {
