@@ -52,7 +52,6 @@ type Exchange struct {
 	slabSize   int  // what the slab will be made with, until the first call of Slab
 	slabReady  bool // the slab has its buffer
 	reqID      string
-	reqIDHdr   string // the header the request-ID middleware answers the id in, for the engine's own 500
 	ws         *WS    // the WebSocket the route is opening, between NewWS and the end of the request (ws.go)
 
 	// What an Observer is told when the request has ended (ADR 0051): set by the framework with
@@ -113,7 +112,7 @@ func (ex *Exchange) Observe(e Ender) { ex.ender = e }
 
 func (ex *Exchange) begin(headLen int) {
 	ex.headLen = headLen
-	ex.reqID, ex.reqIDHdr = "", ""
+	ex.reqID = ""
 	ex.body = nil
 	ex.c.sc.mp = nil
 	ex.sent100, ex.closeAfter = false, false
@@ -126,6 +125,20 @@ func (ex *Exchange) begin(headLen int) {
 	}
 	ex.c.sc.resp.reset()
 	ex.c.sc.resp.lateName, ex.c.sc.resp.late = "", ""
+	ex.c.sc.resp.fault = ex.c.sc.resp.fault[:0]
+}
+
+// AddFaultHeader records a header line for the 500 the engine writes after a panic, which no
+// middleware decorates because the chain never returned (ADR 0028): a middleware that adds a
+// header on the way out records it here before it calls the next layer (the request id, the CORS
+// headers of ADR 0032). The line is copied into the scratch, cleaned as Header cleans, and kept
+// until the next request begins; it is never on an answer the chain returned.
+func (ex *Exchange) AddFaultHeader(name, value string) {
+	r := &ex.c.sc.resp
+	r.fault = appendClean(r.fault, name)
+	r.fault = append(r.fault, ':', ' ')
+	r.fault = appendClean(r.fault, value)
+	r.fault = append(r.fault, '\r', '\n')
 }
 
 // SetLateCookie asks for the Set-Cookie value to be added to this request's answer when its head
@@ -207,11 +220,6 @@ func (ex *Exchange) HeadLen() int { return ex.headLen }
 // carries it, including the 500 the engine writes after a panic (ADR 0012). The string is the
 // caller's and is never modified.
 func (ex *Exchange) SetRequestID(id string) { ex.reqID = id }
-
-// SetRequestIDHeader names the response header the request-ID middleware puts the id in, so the
-// 500 the engine writes after a panic, which no middleware decorates, carries it too (ADR 0028).
-// The name is the middleware's configuration, never request bytes.
-func (ex *Exchange) SetRequestIDHeader(name string) { ex.reqIDHdr = name }
 
 // RequestID is what SetRequestID recorded for this request, or "".
 func (ex *Exchange) RequestID() string { return ex.reqID }
@@ -424,6 +432,11 @@ type Response struct {
 	// added when the head is completed unless the answer failed or sets a cookie of lateName
 	// itself. Kept across Respond, which a later step calls, and cleared when a request begins.
 	lateName, late string
+
+	// fault is the header lines AddFaultHeader recorded, added to the 500 the engine writes
+	// after a panic. Kept across Respond and reset, and emptied when a request begins; its buffer
+	// stays with the scratch, so recording costs no allocation once it has grown.
+	fault []byte
 }
 
 func (r *Response) reset() {

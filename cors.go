@@ -368,6 +368,9 @@ func (c *cors) serve(ctx context.Context, req Request, next Next) (Response, err
 	}
 	origin := req.Header("Origin")
 	if origin == "" {
+		if !c.any {
+			req.addFaultHeader("Vary", "Origin")
+		}
 		res := next.Call(ctx)
 		if !c.any {
 			res.AddHeader("Vary", "Origin")
@@ -379,22 +382,51 @@ func (c *cors) serve(ctx context.Context, req Request, next Next) (Response, err
 			return c.preflight(req, origin, m), nil
 		}
 	}
+	// The origin is decided before the route runs, and the headers it gives are recorded for the
+	// engine's 500 too: after a panic the chain never returns here, and a browser shown a 500
+	// without them reports a CORS failure instead of the 500 (ADR 0032).
+	ok := c.allowed(origin)
+	c.recordForFault(req, origin, ok)
 	res := next.Call(ctx)
-	c.decorate(&res, origin)
+	c.decorate(&res, origin, ok)
 	return res, nil
 }
 
-// decorate adds the headers every answer to an allowed origin carries.
-func (c *cors) decorate(res *Response, origin string) {
+// decorate adds the headers every answer to an origin carries; ok is whether it is allowed.
+// recordForFault must add the same.
+func (c *cors) decorate(res *Response, origin string, ok bool) {
 	if !c.any {
 		res.AddHeader("Vary", "Origin")
 	}
-	if !c.allowed(origin) {
+	if !ok {
 		return
 	}
 	c.allowOrigin(res, origin)
 	if c.expose != "" {
 		res.AddHeader("Access-Control-Expose-Headers", c.expose)
+	}
+}
+
+// recordForFault records for the engine's 500 after a panic the headers decorate adds. It is
+// decorate written for a Request, kept apart so that the Response of the plain path is not passed
+// through an interface, which would move it to the heap.
+func (c *cors) recordForFault(req Request, origin string, ok bool) {
+	if !c.any {
+		req.addFaultHeader("Vary", "Origin")
+	}
+	if !ok {
+		return
+	}
+	if c.any {
+		req.addFaultHeader("Access-Control-Allow-Origin", "*")
+	} else {
+		req.addFaultHeader("Access-Control-Allow-Origin", origin)
+	}
+	if c.credentials {
+		req.addFaultHeader("Access-Control-Allow-Credentials", "true")
+	}
+	if c.expose != "" {
+		req.addFaultHeader("Access-Control-Expose-Headers", c.expose)
 	}
 }
 

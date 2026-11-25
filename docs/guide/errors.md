@@ -255,7 +255,7 @@ X-Request-ID: 4256382ac0011b6f
 {"title":"Bad Request","status":400,"errors":[{"location":"query.page","message":"expected a positive integer","rule":"positive"}],"request_id":"4256382ac0011b6f"}
 ```
 
-A refusal of the request head (431) is answered before any middleware has run, so it has no ID to carry. After a panic the `request_id` is in the body, and the response header is not set.
+A refusal of the request head (431) is answered before any middleware has run, so it has no ID to carry. After a panic the `request_id` is in the body and in the `RequestID` middleware's header, and the CORS headers are there for an allowed origin, so a browser shows the 500 ([ADR 0028](../adr/0028-panics-are-recovered-by-the-engine.md)).
 
 ## Where to go next
 

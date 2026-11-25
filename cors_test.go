@@ -2,6 +2,7 @@ package bites_test
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -350,3 +351,101 @@ func TestCORSWithPathsCoversOnlyThoseAndTheRestOfTheAppIsUntouched(t *testing.T)
 }
 
 func getUserRoot(context.Context, struct{}) (string, error) { return "ok", nil }
+
+// corsHeaders is the CORS headers and Vary of an answer, for comparing two answers.
+func corsHeaders(r bitetest.Response) map[string][]string {
+	out := map[string][]string{}
+	for k, v := range r.Header {
+		if k == "vary" || strings.HasPrefix(k, "access-control-") {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+func boom(context.Context, Empty) (Empty, error) { panic("boom") }
+
+func TestThe500AfterAPanicCarriesTheCORSHeadersSoABrowserShowsThe500AndTheObserverSeesThePanicAsBefore(t *testing.T) {
+	var mu sync.Mutex
+	var log []string
+	rec := newRecorder("r", &mu, &log)
+	srv, _, _ := observed(t, rec, func(app *bites.App) {
+		app.Use(bites.CORS(appOrigin))
+		app.Get("/boom", boom)
+	})
+	r := srv.Do(from("http://localhost:5173", "GET", "/boom"))
+	wantProblem(t, r, 500, `{"title":"Internal Server Error","status":500}`)
+	if r.Get("access-control-allow-origin") != "http://localhost:5173" || !hasVary(r, "Origin") || r.Get("access-control-allow-credentials") != "" {
+		t.Fatalf("the 500 after a panic: %v", r.Header)
+	}
+	o := rec.outcome(t)
+	if !o.Panicked || o.Panic != "boom" || o.Status != 500 || !strings.Contains(string(o.Stack), "bites_test.boom") {
+		t.Fatalf("outcome: panicked %v, panic %v, status %d, stack %.200s", o.Panicked, o.Panic, o.Status, o.Stack)
+	}
+}
+
+func TestThe500AfterAPanicCarriesTheSameCORSHeadersAsAnAnswerWithCredentialsAndExposedHeaders(t *testing.T) {
+	for _, o := range []bites.CORSOptions{
+		{Origins: []string{"https://app.example.com"}, Credentials: true, ExposeHeaders: []string{"X-Request-ID", "ETag"}},
+		{Origins: []string{"https://*.example.com"}, Credentials: true},
+		{AllowOrigin: func(o string) bool { return o == "https://app.example.com" }},
+		{Origins: []string{"*"}, ExposeHeaders: []string{"ETag"}},
+	} {
+		srv := start(t, func(app *bites.App) {
+			app.Use(bites.CORS(o))
+			app.Get("/users/{id}", getUser)
+			app.Get("/boom", boom)
+		})
+		ok := srv.Do(from("https://app.example.com", "GET", "/users/7"))
+		failed := srv.Do(from("https://app.example.com", "GET", "/boom"))
+		if failed.Status != 500 || ok.Get("access-control-allow-origin") == "" || !reflect.DeepEqual(corsHeaders(ok), corsHeaders(failed)) {
+			t.Errorf("%+v: the 200 has %v, the 500 after a panic %d has %v", o, corsHeaders(ok), failed.Status, corsHeaders(failed))
+		}
+	}
+}
+
+func TestThe500AfterAPanicGivesADisallowedOriginNoCORSHeadersOnlyVaryOrigin(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Use(bites.CORS(appOrigin))
+		app.Get("/boom", boom)
+	})
+	r := srv.Do(from("https://evil.example", "GET", "/boom"))
+	if r.Status != 500 || r.Get("access-control-allow-origin") != "" || r.Get("access-control-allow-credentials") != "" || !hasVary(r, "Origin") {
+		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+}
+
+func TestThe500AfterAPanicOnAKeptConnectionCarriesNoCORSHeaderOfTheRequestBefore(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Use(bites.CORS(bites.CORSOptions{Origins: []string{"https://app.example.com"}, Credentials: true, Paths: []string{"/api"}}))
+		app.Get("/api/users/{id}", getUser)
+		app.Get("/page", boom)
+	})
+	c := srv.Dial("203.0.113.9:4000")
+	defer c.Close()
+	send := func(target string) bitetest.Response {
+		if _, err := c.Write([]byte("GET " + target + " HTTP/1.1\r\nHost: test\r\nOrigin: https://app.example.com\r\n\r\n")); err != nil {
+			t.Fatal(err)
+		}
+		return srv.Read(c, false)
+	}
+	if r := send("/api/users/7"); r.Get("access-control-allow-origin") != "https://app.example.com" {
+		t.Fatalf("the first answer: %d %v", r.Status, r.Header)
+	}
+	if r := send("/page"); r.Status != 500 || len(corsHeaders(r)) != 0 {
+		t.Fatalf("the 500 of a path CORS does not cover, after an allowed request on the same connection: %d %v", r.Status, r.Header)
+	}
+}
+
+func TestAPanicInAMiddlewareOutsideCORSIsA500WithNoCORSHeadersBecauseNothingWasDecided(t *testing.T) {
+	srv := start(t, func(app *bites.App) {
+		app.Use(func(ctx context.Context, req bites.Request, next bites.Next) (bites.Response, error) {
+			panic("outer")
+		}, bites.CORS(appOrigin))
+		app.Get("/users/{id}", getUser)
+	})
+	r := srv.Do(from("http://localhost:5173", "GET", "/users/7"))
+	if r.Status != 500 || len(corsHeaders(r)) != 0 {
+		t.Fatalf("%d %v", r.Status, r.Header)
+	}
+}

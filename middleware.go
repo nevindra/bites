@@ -196,11 +196,12 @@ func (r Request) SetRequestID(id string) {
 	}
 }
 
-// setRequestIDHeader tells the engine which header the id goes in, for the 500 it writes after a
-// panic, which the request-ID middleware never sees (ADR 0028).
-func (r Request) setRequestIDHeader(name string) {
+// addFaultHeader records a header for the 500 the engine writes after a panic, which the
+// middleware that adds it on the way out never sees (ADR 0028, ADR 0032). The first-party
+// middleware that decorate every answer call it before next: RequestID and CORS.
+func (r Request) addFaultHeader(name, value string) {
 	if r.live() {
-		r.run.ex.SetRequestIDHeader(name)
+		r.run.ex.AddFaultHeader(name, value)
 	}
 }
 

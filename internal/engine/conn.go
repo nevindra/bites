@@ -843,19 +843,17 @@ func (c *conn) handle() bool {
 			// Nobody is waiting (ADR 0049): the engine's own 500 is not written, to a closed
 			// socket or to one only half-closed, and the connection ends here. A panic was
 			// already logged with its stack by call.
-			ex.reqID, ex.reqIDHdr = "", ""
+			ex.reqID = ""
 			c.ended(Ended{Status: r.Status(), Streamed: isStream, Panicked: panicked, Err: f.err, Panic: f.val, Stack: f.stack, Abandoned: true})
 			return false
 		}
 		r.start(500)
 		r.Header("Content-Type", "application/problem+json")
-		if ex.reqID != "" && ex.reqIDHdr != "" {
-			r.Header(ex.reqIDHdr, ex.reqID) // what the request-ID middleware would have added on the way out
-		}
+		r.head = append(r.head, r.fault...) // what the middleware left would have added on the way out
 		r.body = appendProblem(r.body, 500, ex.reqID)
 	}
 
-	ex.reqID, ex.reqIDHdr = "", "" // the answer is built; an idle connection must not pin the id
+	ex.reqID = "" // the answer is built; an idle connection must not pin the id
 
 	if streamed == streamKeep || streamed == streamClose {
 		ok := c.ended(Ended{Status: r.status, Streamed: true, Abandoned: gone})

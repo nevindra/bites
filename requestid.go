@@ -75,7 +75,7 @@ func (m *requestID) serve(ctx context.Context, req Request, next Next) (Response
 		id = req.newRequestID()
 	}
 	req.SetRequestID(id)
-	req.setRequestIDHeader(m.header)
+	req.addFaultHeader(m.header, id) // the 500 after a panic carries it too
 	res := next.Call(ctx)
 	res.AddHeader(m.header, id)
 	return res, nil
