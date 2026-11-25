@@ -93,9 +93,9 @@ func TestACronJobSeesTheAppsClockAndLoggerAndTheTimeItWasDueAt(t *testing.T) {
 	var now atomic.Value
 	start := cronAt("2026-05-01 08:59", jkt)
 	clk, lb, _ := startCron(t, start, "0 9 * * *", jkt, func(ctx context.Context) error {
-		seen.Store(bites.ScheduledAt(ctx))
 		now.Store(bites.Now(ctx))
 		bites.Logger(ctx).Info("from the job")
+		seen.Store(bites.ScheduledAt(ctx)) // last: the test waits for it, and then reads the other two
 		return nil
 	}, nil)
 	cronAdvanceTo(t, clk, cronAt("2026-05-01 09:00", jkt))
